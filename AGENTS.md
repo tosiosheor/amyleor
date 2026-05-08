@@ -1,0 +1,1 @@
+Should remember settings between sessions in ~/.videomixer_settings.json 
