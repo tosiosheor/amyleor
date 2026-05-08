@@ -1,0 +1,307 @@
+"""
+FastAPI server for Video Mixer.
+Run via amyleor.py or directly: uvicorn server:app --reload
+"""
+import asyncio
+import json
+import queue
+import subprocess
+import sys
+import threading
+import uuid
+from pathlib import Path
+from typing import Optional
+
+from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+
+import pipeline
+from constants import SETTINGS_FILE
+
+app = FastAPI()
+
+# ── Shared state ──────────────────────────────────────────────────────────────
+
+_cancel = threading.Event()
+_running = False
+_job_queues: dict[str, queue.Queue] = {}
+
+_DEFAULT_SETTINGS = {
+    "input": "",
+    "output": str(Path.home() / "Desktop" / "mixed_video.mp4"),
+    "music": "",
+    "duration": "60",
+    "use_max": True,
+    "max_clip": "10",
+    "use_fade": True,
+    "fade_dur": "0.5",
+    "use_seed": False,
+    "seed": "42",
+    "music_vol": "30",
+    "beat_sync": True,
+    "beats_per_clip": "8",
+    "use_countdown": False,
+    "cd_corner": "top-right",
+    "cd_dur": "5",
+    "cd_ivmin": "50",
+    "cd_ivmax": "60",
+    "cd_text1": "HOLD",
+    "cd_text1_dur": "7",
+    "cd_text2": "RELEASE",
+    "cd_text2_dur": "4",
+    "cd_sync": True,
+}
+
+# ── Static / index ─────────────────────────────────────────────────────────────
+
+_STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/")
+async def index():
+    return FileResponse(_STATIC_DIR / "index.html")
+
+
+# ── Settings ──────────────────────────────────────────────────────────────────
+
+@app.get("/api/settings")
+async def get_settings():
+    try:
+        saved = json.loads(SETTINGS_FILE.read_text())
+        return {**_DEFAULT_SETTINGS, **saved}
+    except Exception:
+        return _DEFAULT_SETTINGS
+
+
+@app.post("/api/settings")
+async def save_settings(request: Request):
+    data = await request.json()
+    try:
+        SETTINGS_FILE.write_text(json.dumps(data, indent=2))
+    except Exception:
+        pass
+    return {"ok": True}
+
+
+# ── Browse dialogs ────────────────────────────────────────────────────────────
+
+def _pick_folder() -> Optional[str]:
+    if sys.platform == "darwin":
+        r = subprocess.run(
+            ["osascript", "-e", "POSIX path of (choose folder)"],
+            capture_output=True, text=True, timeout=60,
+        )
+        path = r.stdout.strip().rstrip("/")
+        return path or None
+    else:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        path = filedialog.askdirectory()
+        root.destroy()
+        return path or None
+
+
+def _pick_savefile() -> Optional[str]:
+    if sys.platform == "darwin":
+        r = subprocess.run(
+            ["osascript", "-e",
+             'POSIX path of (choose file name with prompt "Save output video:" '
+             'default name "mixed_video.mp4")'],
+            capture_output=True, text=True, timeout=60,
+        )
+        path = r.stdout.strip()
+        return path or None
+    else:
+        import tkinter as tk
+        from tkinter import filedialog
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        path = filedialog.asksaveasfilename(
+            defaultextension=".mp4",
+            filetypes=[("MP4 Video", "*.mp4"), ("All Files", "*.*")],
+        )
+        root.destroy()
+        return path or None
+
+
+@app.post("/api/browse/folder")
+async def browse_folder():
+    loop = asyncio.get_event_loop()
+    path = await loop.run_in_executor(None, _pick_folder)
+    return {"path": path}
+
+
+@app.post("/api/browse/savefile")
+async def browse_savefile():
+    loop = asyncio.get_event_loop()
+    path = await loop.run_in_executor(None, _pick_savefile)
+    return {"path": path}
+
+
+# ── SSE streaming ─────────────────────────────────────────────────────────────
+
+@app.get("/api/stream/{job_id}")
+async def stream_job(job_id: str):
+    q = _job_queues.get(job_id)
+    if q is None:
+        return JSONResponse({"error": "unknown job"}, status_code=404)
+
+    async def event_gen():
+        while True:
+            try:
+                item = q.get_nowait()
+            except queue.Empty:
+                await asyncio.sleep(0.05)
+                continue
+            yield f"data: {json.dumps(item)}\n\n"
+            if item.get("type") in ("done", "error"):
+                break
+
+    return StreamingResponse(
+        event_gen(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# ── Settings → pipeline args ──────────────────────────────────────────────────
+
+def _parse_settings(s: dict) -> dict:
+    target_dur = float(s.get("duration", 60))
+    max_clip = float(s["max_clip"]) if s.get("use_max") else None
+    fade_dur = float(s["fade_dur"]) if s.get("use_fade") else 0.0
+    seed = int(s["seed"]) if s.get("use_seed") else None
+    music_vol = float(s.get("music_vol", 30)) / 100.0
+    beats_per_clip = int(s.get("beats_per_clip", 8))
+    beat_sync = bool(s.get("beat_sync", True))
+
+    countdown_cfg = None
+    if s.get("use_countdown"):
+        text1 = s.get("cd_text1", "").strip()
+        text2 = s.get("cd_text2", "").strip()
+        countdown_cfg = {
+            "dur": float(s.get("cd_dur", 5)),
+            "iv_min": float(s.get("cd_ivmin", 50)),
+            "iv_max": float(s.get("cd_ivmax", 60)),
+            "corner": s.get("cd_corner", "top-right"),
+            "text1": text1,
+            "text1_dur": float(s.get("cd_text1_dur", 7)) if text1 else 0.0,
+            "text2": text2,
+            "text2_dur": float(s.get("cd_text2_dur", 4)) if text2 else 0.0,
+            "sync": bool(s.get("cd_sync", True)),
+        }
+
+    return dict(
+        folder=s.get("input", ""),
+        output=s.get("output", ""),
+        target_dur=target_dur,
+        max_clip=max_clip,
+        seed=seed,
+        music_folder=s.get("music", ""),
+        music_vol=music_vol,
+        fade_dur=fade_dur,
+        beat_sync=beat_sync,
+        beats_per_clip=beats_per_clip,
+        countdown_cfg=countdown_cfg,
+    )
+
+
+# ── Job runner ────────────────────────────────────────────────────────────────
+
+def _new_job() -> tuple[str, queue.Queue]:
+    global _running
+    job_id = str(uuid.uuid4())
+    q: queue.Queue = queue.Queue()
+    _job_queues[job_id] = q
+    _cancel.clear()
+    _running = True
+    return job_id, q
+
+
+def _make_callbacks(q: queue.Queue):
+    def log_fn(msg, color=None):
+        q.put({"type": "log", "msg": msg, "color": color})
+
+    def status_fn(msg):
+        q.put({"type": "status", "msg": msg})
+
+    def prog_fn(val):
+        q.put({"type": "progress", "value": val})
+
+    return log_fn, status_fn, prog_fn
+
+
+# ── Plan endpoint ─────────────────────────────────────────────────────────────
+
+@app.post("/api/plan")
+async def start_plan(request: Request):
+    global _running
+    if _running:
+        return JSONResponse({"error": "already running"}, status_code=409)
+
+    settings = await request.json()
+    job_id, q = _new_job()
+
+    def run():
+        global _running
+        try:
+            log_fn, status_fn, prog_fn = _make_callbacks(q)
+            kwargs = _parse_settings(settings)
+            plan = pipeline.do_analyse(
+                **kwargs,
+                log_fn=log_fn, status_fn=status_fn, prog_fn=prog_fn,
+                cancel_event=_cancel,
+            )
+            if plan is not None:
+                q.put({"type": "plan", "plan": plan})
+            q.put({"type": "done"})
+        except Exception as exc:
+            q.put({"type": "error", "msg": str(exc)})
+        finally:
+            _running = False
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"job_id": job_id}
+
+
+# ── Generate endpoint ─────────────────────────────────────────────────────────
+
+@app.post("/api/generate")
+async def start_generate(request: Request):
+    global _running
+    if _running:
+        return JSONResponse({"error": "already running"}, status_code=409)
+
+    plan = await request.json()
+    job_id, q = _new_job()
+
+    def run():
+        global _running
+        try:
+            log_fn, status_fn, prog_fn = _make_callbacks(q)
+            pipeline.do_generate(
+                plan,
+                log_fn=log_fn, status_fn=status_fn, prog_fn=prog_fn,
+                cancel_event=_cancel,
+            )
+            q.put({"type": "done"})
+        except Exception as exc:
+            q.put({"type": "error", "msg": str(exc)})
+        finally:
+            _running = False
+
+    threading.Thread(target=run, daemon=True).start()
+    return {"job_id": job_id}
+
+
+# ── Cancel ─────────────────────────────────────────────────────────────────────
+
+@app.post("/api/cancel")
+async def cancel_job():
+    if _running:
+        _cancel.set()
+    return {"ok": True}

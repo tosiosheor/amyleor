@@ -1,13 +1,16 @@
 # Video Mixer
 
-A macOS GUI app that combines landscape and portrait clips into a single 1920×1080 landscape video, with optional music, beat-synced transitions, countdown overlays, and smart clip selection.
+A local web app that combines landscape and portrait clips into a single 1920×1080 landscape video, with optional music, beat-synced transitions, countdown overlays, and smart clip selection. Settings and a visual timeline run in the browser; all encoding happens via a local Python/FFmpeg server.
 
 ```
-python3 videor.py
+python3 amyleor.py           # opens in default browser
+python3 amyleor.py --app     # opens in a native window (requires pywebview)
 ```
 
 **Requires:** `ffmpeg` + `ffprobe` — `brew install ffmpeg`  
-**Optional:** `librosa` — `pip install librosa` (beat detection and music change-point analysis)
+**Requires:** `fastapi`, `uvicorn` — `pip install fastapi "uvicorn[standard]"`  
+**Optional:** `librosa` — `pip install librosa` (beat detection and music change-point analysis)  
+**Optional:** `pywebview` — `pip install pywebview` (native window instead of browser tab)
 
 ---
 
@@ -101,7 +104,10 @@ The codebase is split into focused modules so each fits in a single AI context w
 
 | File | Lines | Contents |
 |---|---|---|
-| `videor.py` | 24 | Entry point — `python3 videor.py` |
+| `amyleor.py` | ~55 | Entry point — starts uvicorn, opens browser or pywebview window |
+| `server.py` | ~220 | FastAPI server — settings, browse dialogs, SSE-streamed plan/generate/cancel endpoints |
+| `static/index.html` | ~560 | Single-file web UI — settings accordion, timeline editor, log console |
+| `pipeline.py` | ~460 | `do_analyse`, `do_generate`, `build_section_clips` — all processing logic, no GUI deps |
 | `constants.py` | 30 | All shared constants (paths, extensions, output dimensions, colours) |
 | `cache.py` | 55 | `_load_cache`, `_save_cache`, `_fingerprint`, `_fp_match`, `_clip_cache_key`, `_evict_clip_cache` |
 | `ffmpeg_utils.py` | 81 | `_run`, `_run_ffmpeg`, `check_ffmpeg`, `get_video_info` |
@@ -109,12 +115,31 @@ The codebase is split into focused modules so each fits in a single AI context w
 | `overlay.py` | 183 | `build_countdown_events`, `apply_countdown_overlay`, `_render_overlay_png`, `_corner_pos` |
 | `analysis.py` | 188 | `find_highlight_start`, `analyze_portrait_motion`, `detect_change_points`, `_compute_section_boundaries` |
 | `video.py` | 275 | `_filter`, `process_clip`, `concat_clips`, `_xfade_chunk`, `xfade_concat` |
-| `app.py` | ~1560 | `VideoMixer` tkinter GUI — all UI, settings persistence, and the plan/generate pipeline |
+| `app.py` | ~1560 | Legacy tkinter GUI (kept for reference; superseded by the web UI) |
+
+### Architecture
+
+```
+browser  ──HTTP/SSE──►  server.py (FastAPI + uvicorn)
+                              │
+                         pipeline.py
+                         (do_analyse / do_generate)
+                              │
+            ┌─────────────────┼─────────────────┐
+         analysis.py      video.py           audio.py
+         overlay.py       cache.py           ffmpeg_utils.py
+```
+
+- **Plan Video** POSTs settings to `/api/plan`; the server runs `do_analyse` in a background thread and streams log/progress/plan events back via SSE.
+- **Generate Video** POSTs the (possibly edited) plan JSON to `/api/generate`; the server runs `do_generate` and streams progress back the same way.
+- **Timeline** in the browser lets you drag clips to reorder, click to edit start/duration, or remove clips before generating.
 
 ### Key functions
 
 | Function | File | Purpose |
 |---|---|---|
+| `do_analyse` | `pipeline.py` | Scans folder, probes videos, detects beats/change-points, returns plan dict |
+| `do_generate` | `pipeline.py` | Encodes clips from a plan dict, mixes music, applies countdown overlay |
 | `get_video_info` | `ffmpeg_utils.py` | ffprobe wrapper — width, height, duration, rotation, has_audio |
 | `find_highlight_start` | `analysis.py` | Scene-change density scan for the most active clip window |
 | `analyze_portrait_motion` | `analysis.py` | Frame-difference motion analysis for portrait blur/pan/offset |
@@ -128,7 +153,6 @@ The codebase is split into focused modules so each fits in a single AI context w
 | `process_clip` | `video.py` | Transcodes one clip to 1920×1080/30 fps |
 | `xfade_concat` | `video.py` | Chains clips with xfade/acrossfade and optionally mixes music |
 | `concat_clips` | `video.py` | Simple lossless concat via concat demuxer |
-| `VideoMixer` | `app.py` | tkinter GUI — all UI state and the plan/generate pipeline |
 
 ---
 

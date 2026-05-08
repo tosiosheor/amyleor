@@ -86,6 +86,20 @@ class VideoMixer(tk.Tk):
         except Exception:
             pass
 
+        if sys.platform == "darwin":
+            try:
+                import tempfile
+                from AppKit import NSApplication, NSImage
+                _icon_bytes = base64.b64decode(_APP_ICON_B64)
+                with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as _f:
+                    _f.write(_icon_bytes)
+                    _tmp = _f.name
+                _img = NSImage.alloc().initWithContentsOfFile_(_tmp)
+                NSApplication.sharedApplication().setApplicationIconImage_(_img)
+                os.unlink(_tmp)
+            except Exception:
+                pass
+
         self._cancel = threading.Event()
         self._running = False
 
