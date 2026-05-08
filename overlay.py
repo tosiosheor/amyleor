@@ -1,10 +1,9 @@
 import math
 import os
-import subprocess
 import tempfile
 
 from constants import FONT_CANDIDATES
-from ffmpeg_utils import get_video_info
+from ffmpeg_utils import _run_ffmpeg, get_video_info
 
 
 def _find_font(font_size):
@@ -115,7 +114,7 @@ def build_countdown_events(
     return events
 
 
-def apply_countdown_overlay(input_path, output_path, events, corner, cancel_event=None):
+def apply_countdown_overlay(input_path, output_path, events, corner, cancel_event=None, log_fn=None):
     """Re-encode video with countdown/text overlays using Pillow-rendered PNGs."""
     if not events:
         return True
@@ -168,16 +167,10 @@ def apply_countdown_overlay(input_path, output_path, events, corner, cancel_even
         cmd += ["-c:a", "copy"]
         cmd.append(str(output_path))
 
-        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        while proc.poll() is None:
-            if cancel_event and cancel_event.is_set():
-                proc.kill()
+        try:
+            _run_ffmpeg(cmd, log_fn=log_fn, cancel_event=cancel_event)
+        except RuntimeError as exc:
+            if str(exc) == "Cancelled":
                 return False
-            try:
-                proc.wait(timeout=0.5)
-            except subprocess.TimeoutExpired:
-                pass
-
-        if proc.returncode != 0:
-            raise RuntimeError(proc.communicate()[1].decode(errors="replace")[-800:])
+            raise
         return True

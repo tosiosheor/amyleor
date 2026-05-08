@@ -50,9 +50,40 @@ def _is_cancelled(cancel_event):
     return cancel_event is not None and cancel_event.is_set()
 
 
+def _ensure_energy(pool, cache_data, log_fn):
+    """Compute + cache RMS energy for each (vf, info) in pool. Returns whether cache was dirtied."""
+    ecache = cache_data.setdefault("video_energy", {})
+    dirty = False
+    for vf, info in pool:
+        key = vf.name
+        if key in ecache and _fp_match(vf, ecache[key]):
+            info["energy"] = ecache[key]["energy"]
+        else:
+            log_fn(f"  Measuring intensity: {vf.name}…", color="subtle")
+            energy = get_music_energy(vf)
+            info["energy"] = energy
+            mtime, size = _fingerprint(vf)
+            ecache[key] = {"mtime": mtime, "size": size, "energy": energy}
+            dirty = True
+    return dirty
+
+
+def _collect_subfolders(root):
+    """DFS pre-order walk; returns all dirs under root that directly contain video files."""
+    result = []
+    for d in sorted(Path(root).iterdir()):
+        if not d.is_dir() or d.name.startswith("."):
+            continue
+        if any(f.suffix.lower() in VIDEO_EXTENSIONS for f in d.iterdir() if f.is_file()):
+            result.append(d)
+        result.extend(_collect_subfolders(d))
+    return result
+
+
 def build_section_clips(
     pool, section_dur, rng, max_clip, beats, beats_per_clip, beat_idx,
-    *, log_fn=_noop, cancel_event=None, hcache=None,
+    *, log_fn=_noop, cancel_event=None, hcache=None, clip_order="random",
+    use_all=False,
 ):
     """
     Build clips from pool to fill section_dur seconds.
@@ -72,18 +103,46 @@ def build_section_clips(
                 cycle += 1
                 if cycle > 20:
                     break
-            beat_dur = beats[beat_idx + beats_per_clip] - beats[beat_idx]
-            beat_idx += beats_per_clip
 
             if pool_idx >= len(pool):
+                if use_all:
+                    break
                 pool_idx = 0
-                rng.shuffle(pool)
+                if clip_order == "intensity":
+                    pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
+                else:
+                    rng.shuffle(pool)
             vf, info = pool[pool_idx]
             pool_idx += 1
 
             raw_dur = info["duration"]
+            target = min(raw_dur, max_clip) if max_clip else raw_dur
+            n_beats = beats_per_clip
+            while (beat_idx + n_beats + 1 < len(beats) and
+                   beats[beat_idx + n_beats + 1] - beats[beat_idx] <= target):
+                n_beats += 1
+            beat_dur = beats[beat_idx + n_beats] - beats[beat_idx]
+            beat_idx += n_beats
+
             if raw_dur >= beat_dur:
-                start = round(rng.uniform(0, raw_dur - beat_dur), 3)
+                if max_clip and raw_dur > beat_dur:
+                    window = min(raw_dur, max_clip)
+                    cache_key = f"{vf.name}:{window:.3f}"
+                    if hcache is not None and cache_key in hcache and _fp_match(vf, hcache[cache_key]):
+                        hs = hcache[cache_key]["start"]
+                    else:
+                        log_fn(f"  Analysing {vf.name} for highlights…", color="subtle")
+                        hs = find_highlight_start(
+                            vf, window, info,
+                            log_fn=lambda m: log_fn(m, color="subtle"),
+                        )
+                        if hcache is not None:
+                            mtime, size = _fingerprint(vf)
+                            hcache[cache_key] = {"mtime": mtime, "size": size, "start": hs}
+                    he = hs + window
+                    start = round(max(0.0, min(he - beat_dur, raw_dur - beat_dur)), 3)
+                else:
+                    start = round(rng.uniform(0, raw_dur - beat_dur), 3)
                 clip_dur = beat_dur
             else:
                 start = 0.0
@@ -96,9 +155,14 @@ def build_section_clips(
             if _is_cancelled(cancel_event):
                 return None, beat_idx
             if pool_idx >= len(pool):
+                if use_all:
+                    break
                 pool_idx = 0
                 cycle += 1
-                rng.shuffle(pool)
+                if clip_order == "intensity":
+                    pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
+                else:
+                    rng.shuffle(pool)
                 if cycle > 50:
                     break
             vf, info = pool[pool_idx]
@@ -130,7 +194,8 @@ def build_section_clips(
 def do_analyse(
     folder, output, target_dur, max_clip, seed,
     music_folder, music_vol, fade_dur, beat_sync, beats_per_clip,
-    countdown_cfg=None,
+    countdown_cfg=None, clip_order="random",
+    subfolder_split="equal", use_all=False,
     *, log_fn=_noop, status_fn=_noop, prog_fn=_noop, cancel_event=None,
 ):
     """Analyse sources and return a plan dict, or None if cancelled."""
@@ -169,14 +234,15 @@ def do_analyse(
             pool.append((f, info))
         else:
             log_fn(f"  ✗ {f.name}  (skipped — unreadable)", color="subtle")
+    if clip_order == "intensity" and pool:
+        log_fn("Computing clip intensity…", color="accent")
+        if _ensure_energy(pool, vcache_data, log_fn):
+            vcache_dirty = True
+
     if vcache_dirty:
         _save_cache(folder, vcache_data)
 
-    _subfolders = sorted([
-        d for d in Path(folder).iterdir()
-        if d.is_dir() and not d.name.startswith(".")
-        and any(f.suffix.lower() in VIDEO_EXTENSIONS for f in d.iterdir() if f.is_file())
-    ])
+    _subfolders = _collect_subfolders(folder)
     _subfolder_mode = len(_subfolders) >= 2
 
     if not pool and not _subfolder_mode:
@@ -289,6 +355,9 @@ def do_analyse(
                         sf_dirty = True
                 if info:
                     sf_pool.append((f, info))
+            if clip_order == "intensity" and sf_pool:
+                if _ensure_energy(sf_pool, sf_cache_data, log_fn):
+                    sf_dirty = True
             if sf_dirty:
                 _save_cache(sf, sf_cache_data)
             if sf_pool:
@@ -301,7 +370,39 @@ def do_analyse(
             raise RuntimeError("No usable videos found in any subfolder.")
 
         n_secs = len(subfolder_pools)
-        section_durs, boundary_info = _compute_section_boundaries(n_secs, target_dur, change_points)
+
+        # Compute proportional weights for section boundaries
+        if subfolder_split == "by_count":
+            total_count = sum(len(sf_pool) for _, sf_pool, _ in subfolder_pools)
+            weights = [len(sf_pool) / total_count for _, sf_pool, _ in subfolder_pools]
+        elif subfolder_split == "by_duration":
+            sf_raw_durs = [
+                sum(info["duration"] for _, info in sf_pool)
+                for _, sf_pool, _ in subfolder_pools
+            ]
+            grand_dur = sum(sf_raw_durs)
+            weights = [d / grand_dur for d in sf_raw_durs] if grand_dur > 0 else None
+        else:
+            weights = None
+
+        if use_all:
+            # Estimate section durations from actual clip lengths for change-point snapping
+            clip_est = lambda info: min(max_clip, info["duration"]) if max_clip else info["duration"]
+            sf_est_durs = [
+                sum(clip_est(info) for _, info in sf_pool)
+                for _, sf_pool, _ in subfolder_pools
+            ]
+            est_total = sum(sf_est_durs)
+            est_weights = [d / est_total for d in sf_est_durs] if est_total > 0 else None
+            section_durs, boundary_info = _compute_section_boundaries(
+                n_secs, est_total, change_points, weights=est_weights
+            )
+            build_durs = [float("inf")] * n_secs
+        else:
+            section_durs, boundary_info = _compute_section_boundaries(
+                n_secs, target_dur, change_points, weights=weights
+            )
+            build_durs = section_durs
 
         if change_points and boundary_info:
             for i, (raw, snapped) in enumerate(boundary_info):
@@ -315,15 +416,22 @@ def do_analyse(
         clips = []
         total = 0.0
         beat_idx = 0
-        for (sf, sf_pool, sf_cache_data), sec_dur in zip(subfolder_pools, section_durs):
+        for (sf, sf_pool, sf_cache_data), sec_dur, build_dur in zip(
+            subfolder_pools, section_durs, build_durs
+        ):
             sf_pool_copy = list(sf_pool)
-            rng.shuffle(sf_pool_copy)
-            log_fn(f"\n  Section '{sf.name}' — target {sec_dur:.0f}s", color="accent")
+            if clip_order == "intensity":
+                sf_pool_copy.sort(key=lambda x: x[1].get("energy") or float("-inf"))
+            else:
+                rng.shuffle(sf_pool_copy)
+            dur_label = "all videos" if use_all else f"target {sec_dur:.0f}s"
+            log_fn(f"\n  Section '{sf.name}' — {dur_label}", color="accent")
             sf_hcache = sf_cache_data.setdefault("highlights", {})
             sf_hcache_prev_len = len(sf_hcache)
             sec_clips, beat_idx = build_section_clips(
-                sf_pool_copy, sec_dur, rng, max_clip, beats, beats_per_clip, beat_idx,
+                sf_pool_copy, build_dur, rng, max_clip, beats, beats_per_clip, beat_idx,
                 log_fn=log_fn, cancel_event=cancel_event, hcache=sf_hcache,
+                clip_order=clip_order, use_all=use_all,
             )
             if len(sf_hcache) > sf_hcache_prev_len:
                 _save_cache(sf, sf_cache_data)
@@ -339,17 +447,70 @@ def do_analyse(
         log_fn(f"\nTotal: {len(clips)} clip(s) → ~{total:.1f}s")
 
     else:
-        rng.shuffle(pool)
+        if clip_order == "intensity":
+            pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
+        else:
+            rng.shuffle(pool)
         clips = []
         total = 0.0
         pool_idx = 0
 
-        log_fn(f"\nBuilding clip list (target: {target_dur:.0f}s)…", color="accent")
+        dur_label = "all videos" if use_all else f"target: {target_dur:.0f}s"
+        log_fn(f"\nBuilding clip list ({dur_label})…", color="accent")
+        effective_target = float("inf") if use_all else target_dur
 
-        if beats and len(beats) > beats_per_clip:
+        if change_points and not use_all and countdown_cfg and countdown_cfg.get("sync"):
+            # Build clips so transitions land exactly on music change points.
+            hcache = vcache_data.setdefault("highlights", {})
+            hcache_prev_len = len(hcache)
+            all_cps = sorted(t for t in change_points if 0 < t < effective_target)
+            boundaries = [0.0] + all_cps + [effective_target]
+            for b_idx in range(len(boundaries) - 1):
+                iv_remaining = round(boundaries[b_idx + 1] - boundaries[b_idx], 3)
+                while iv_remaining > 0.05:
+                    if _is_cancelled(cancel_event):
+                        return None
+                    if pool_idx >= len(pool):
+                        pool_idx = 0
+                        if clip_order == "intensity":
+                            pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
+                        else:
+                            rng.shuffle(pool)
+                    vf, info = pool[pool_idx]
+                    pool_idx += 1
+                    raw_dur = info["duration"]
+                    clip_dur = round(
+                        min(iv_remaining, max_clip, raw_dur) if max_clip
+                        else min(iv_remaining, raw_dur),
+                        3,
+                    )
+                    if raw_dur > clip_dur:
+                        cache_key = f"{vf.name}:{clip_dur:.3f}"
+                        if cache_key in hcache and _fp_match(vf, hcache[cache_key]):
+                            start = hcache[cache_key]["start"]
+                        else:
+                            log_fn(f"  Analysing {vf.name} for highlights…", color="subtle")
+                            start = find_highlight_start(
+                                vf, clip_dur, info,
+                                log_fn=lambda m: log_fn(m, color="subtle"),
+                            )
+                            mtime, size = _fingerprint(vf)
+                            hcache[cache_key] = {"mtime": mtime, "size": size, "start": start}
+                    else:
+                        start = 0.0
+                        clip_dur = raw_dur
+                    clips.append((vf, info, start, clip_dur))
+                    total += clip_dur
+                    iv_remaining = round(iv_remaining - clip_dur, 3)
+            if len(hcache) > hcache_prev_len:
+                _save_cache(folder, vcache_data)
+            log_fn(f"  Change-point synced: {len(clips)} clip(s) → ~{total:.1f}s total")
+        elif beats and len(beats) > beats_per_clip:
             beat_idx = 0
             cycle = 0
-            while total < target_dur:
+            hcache = vcache_data.setdefault("highlights", {})
+            hcache_prev_len = len(hcache)
+            while total < effective_target:
                 if _is_cancelled(cancel_event):
                     return None
                 if beat_idx + beats_per_clip >= len(beats):
@@ -357,18 +518,45 @@ def do_analyse(
                     cycle += 1
                     if cycle > 20:
                         break
-                beat_dur = beats[beat_idx + beats_per_clip] - beats[beat_idx]
-                beat_idx += beats_per_clip
 
                 if pool_idx >= len(pool):
+                    if use_all:
+                        break
                     pool_idx = 0
-                    rng.shuffle(pool)
+                    if clip_order == "intensity":
+                        pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
+                    else:
+                        rng.shuffle(pool)
                 vf, info = pool[pool_idx]
                 pool_idx += 1
 
                 raw_dur = info["duration"]
+                target = min(raw_dur, max_clip) if max_clip else raw_dur
+                n_beats = beats_per_clip
+                while (beat_idx + n_beats + 1 < len(beats) and
+                       beats[beat_idx + n_beats + 1] - beats[beat_idx] <= target):
+                    n_beats += 1
+                beat_dur = beats[beat_idx + n_beats] - beats[beat_idx]
+                beat_idx += n_beats
+
                 if raw_dur >= beat_dur:
-                    start = round(rng.uniform(0, raw_dur - beat_dur), 3)
+                    if max_clip and raw_dur > beat_dur:
+                        window = min(raw_dur, max_clip)
+                        cache_key = f"{vf.name}:{window:.3f}"
+                        if cache_key in hcache and _fp_match(vf, hcache[cache_key]):
+                            hs = hcache[cache_key]["start"]
+                        else:
+                            log_fn(f"  Analysing {vf.name} for highlights…", color="subtle")
+                            hs = find_highlight_start(
+                                vf, window, info,
+                                log_fn=lambda m: log_fn(m, color="subtle"),
+                            )
+                            mtime, size = _fingerprint(vf)
+                            hcache[cache_key] = {"mtime": mtime, "size": size, "start": hs}
+                        he = hs + window
+                        start = round(max(0.0, min(he - beat_dur, raw_dur - beat_dur)), 3)
+                    else:
+                        start = round(rng.uniform(0, raw_dur - beat_dur), 3)
                     clip_dur = beat_dur
                 else:
                     start = 0.0
@@ -376,18 +564,25 @@ def do_analyse(
                 clips.append((vf, info, start, clip_dur))
                 total += clip_dur
 
+            if len(hcache) > hcache_prev_len:
+                _save_cache(folder, vcache_data)
             log_fn(f"  Beat-aligned: {len(clips)} clip(s) → ~{total:.1f}s total")
         else:
             cycle = 0
             hcache = vcache_data.setdefault("highlights", {})
             hcache_prev_len = len(hcache)
-            while total < target_dur:
+            while total < effective_target:
                 if _is_cancelled(cancel_event):
                     return None
                 if pool_idx >= len(pool):
+                    if use_all:
+                        break
                     pool_idx = 0
                     cycle += 1
-                    rng.shuffle(pool)
+                    if clip_order == "intensity":
+                        pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
+                    else:
+                        rng.shuffle(pool)
                     if cycle > 50:
                         break
                 vf, info = pool[pool_idx]
@@ -697,7 +892,39 @@ def do_generate(
         final_info = get_video_info(output)
         final_dur = final_info["duration"] if final_info else total
 
-        cp = countdown_cfg.get("change_points") if countdown_cfg.get("sync") else None
+        if countdown_cfg.get("sync"):
+            clip_durations = [c["duration"] for c in clips_data]
+            n_clips = len(clip_durations)
+            actual_fd = (
+                max(0.0, (sum(clip_durations) - final_dur) / (n_clips - 1))
+                if n_clips > 1 else 0.0
+            )
+            stored_cps = countdown_cfg.get("change_points")
+            if stored_cps:
+                # Convert music-timeline change points to video timeline by subtracting
+                # the accumulated crossfade offset for each point's position in the clip list.
+                music_cumsum = 0.0
+                music_ends = []
+                for d in clip_durations:
+                    music_cumsum += d
+                    music_ends.append(music_cumsum)
+                cp = []
+                for t in stored_cps:
+                    for i, me in enumerate(music_ends):
+                        if t <= me:
+                            cp.append(max(0.0, t - i * actual_fd))
+                            break
+                    else:
+                        cp.append(max(0.0, t - (n_clips - 1) * actual_fd))
+            else:
+                # No stored change points — fall back to clip boundary positions
+                cumsum = 0.0
+                cp = []
+                for i, d in enumerate(clip_durations[:-1]):
+                    cumsum += d
+                    cp.append(max(0.0, cumsum - (i + 1) * actual_fd))
+        else:
+            cp = None
 
         events = build_countdown_events(
             total_dur=final_dur,
@@ -716,7 +943,8 @@ def do_generate(
             log_fn(f"  {len(events)} overlay segment(s) planned", color="subtle")
             overlay_tmp = Path(output).with_suffix(".overlay_tmp.mp4")
             ok = apply_countdown_overlay(
-                Path(output), overlay_tmp, events, countdown_cfg["corner"], cancel_event
+                Path(output), overlay_tmp, events, countdown_cfg["corner"], cancel_event,
+                log_fn=lambda m: log_fn(m, color="subtle"),
             )
             if not ok:
                 log_fn("Cancelled.", color="subtle")

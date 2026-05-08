@@ -162,13 +162,19 @@ def detect_change_points(path, log_fn=None):
         return None
 
 
-def _compute_section_boundaries(n_sections, total_dur, change_points, buffer=60.0):
+def _compute_section_boundaries(n_sections, total_dur, change_points, buffer=60.0, weights=None):
     """
     Return (section_durs, snapped_boundaries).
     Boundaries are nudged to the nearest music change point within ±buffer seconds when available.
+    weights: optional list of fractions (summing to 1.0) for proportional splits; None = equal.
     """
-    equal_dur = total_dur / n_sections
-    raw_boundaries = [equal_dur * (i + 1) for i in range(n_sections - 1)]
+    if weights is None:
+        weights = [1.0 / n_sections] * n_sections
+    raw_boundaries = []
+    acc = 0.0
+    for w in weights[:-1]:
+        acc += w * total_dur
+        raw_boundaries.append(acc)
     snapped = []
     for raw in raw_boundaries:
         best = raw

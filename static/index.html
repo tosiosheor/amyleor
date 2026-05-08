@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Video Mixer</title>
+<title>Amyleor</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -28,11 +28,7 @@ body {
   line-height: 1.5;
 }
 
-.container {
-  max-width: 980px;
-  margin: 0 auto;
-  padding: 24px 20px 40px;
-}
+.container { max-width: 980px; margin: 0 auto; padding: 24px 20px 40px; }
 
 /* ── Header ── */
 .header { margin-bottom: 20px; }
@@ -43,74 +39,40 @@ body {
 details { border-bottom: 1px solid var(--border); }
 details summary {
   padding: 11px 0;
-  font-size: 11px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--subtle);
-  cursor: pointer;
-  user-select: none;
-  list-style: none;
-  display: flex;
-  align-items: center;
-  gap: 7px;
+  font-size: 11px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--subtle); cursor: pointer; user-select: none;
+  list-style: none; display: flex; align-items: center; gap: 7px;
 }
 details summary::-webkit-details-marker { display: none; }
 details summary::before {
-  content: '▶';
-  font-size: 9px;
-  transition: transform 0.15s;
-  display: inline-block;
-  width: 10px;
+  content: '▶'; font-size: 9px; transition: transform 0.15s;
+  display: inline-block; width: 10px;
 }
 details[open] summary::before { transform: rotate(90deg); }
 .section-body { padding: 4px 0 16px 17px; }
 
 /* ── Form rows ── */
-.form-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 9px;
-  flex-wrap: wrap;
-}
+.form-row { display: flex; align-items: center; gap: 10px; margin-bottom: 9px; flex-wrap: wrap; }
 .form-row label { font-size: 13px; }
 .form-row label.fixed { width: 160px; flex-shrink: 0; }
 input[type="text"], input[type="number"], select {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  padding: 5px 10px;
-  font-size: 13px;
-  font-family: inherit;
-  outline: none;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 6px; color: var(--text);
+  padding: 5px 10px; font-size: 13px; font-family: inherit; outline: none;
 }
-input[type="text"]:focus, input[type="number"]:focus, select:focus {
-  border-color: var(--accent);
-}
+input[type="text"]:focus, input[type="number"]:focus, select:focus { border-color: var(--accent); }
 input[type="text"].path { flex: 1; min-width: 200px; }
 input[type="number"].short { width: 76px; }
 .unit { color: var(--subtle); font-size: 12px; white-space: nowrap; }
-input[type="checkbox"] {
-  width: 15px; height: 15px;
-  accent-color: var(--accent);
-  cursor: pointer;
-  flex-shrink: 0;
-}
+input[type="checkbox"] { width: 15px; height: 15px; accent-color: var(--accent); cursor: pointer; flex-shrink: 0; }
 
 /* ── Buttons ── */
 .btn {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  color: var(--text);
-  padding: 6px 14px;
-  font-size: 13px;
-  font-family: inherit;
-  cursor: pointer;
-  transition: background 0.1s;
-  white-space: nowrap;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 7px; color: var(--text);
+  padding: 6px 14px; font-size: 13px; font-family: inherit;
+  cursor: pointer; transition: background 0.1s; white-space: nowrap;
 }
 .btn:hover:not(:disabled) { background: var(--border); }
 .btn:disabled { opacity: 0.38; cursor: not-allowed; }
@@ -123,23 +85,17 @@ input[type="checkbox"] {
 
 /* ── Action bar ── */
 .action-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
+  display: flex; align-items: center; gap: 10px;
   padding: 14px 0;
-  border-top: 1px solid var(--border);
-  border-bottom: 1px solid var(--border);
-  margin-top: 6px;
-  flex-wrap: wrap;
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+  margin-top: 6px; flex-wrap: wrap;
 }
 .btn-group { display: flex; gap: 8px; align-items: center; }
 .progress-area { flex: 1; min-width: 180px; }
 .progress-wrap { display: flex; align-items: center; gap: 10px; }
 progress {
-  flex: 1; height: 5px;
-  border-radius: 3px; border: none;
-  background: var(--panel);
-  appearance: none; -webkit-appearance: none;
+  flex: 1; height: 5px; border-radius: 3px; border: none;
+  background: var(--panel); appearance: none; -webkit-appearance: none;
 }
 progress::-webkit-progress-bar { background: var(--panel); border-radius: 3px; }
 progress::-webkit-progress-value { background: var(--accent); border-radius: 3px; transition: width 0.3s; }
@@ -147,93 +103,139 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 
 /* ── Plan section header ── */
 .plan-hdr {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: flex; align-items: center; justify-content: space-between;
   padding: 14px 0 10px;
 }
-.plan-hdr h2 {
-  font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--subtle);
-}
+.plan-hdr h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--subtle); }
 
 /* ── Timeline ── */
-.timeline-wrap {
+.tl-wrap {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
-  padding: 10px 12px;
-  min-height: 78px;
-  overflow-x: auto;
+  overflow: hidden;
   margin-bottom: 8px;
 }
-.timeline-empty {
+.tl-empty {
   display: flex; align-items: center; justify-content: center;
-  min-height: 56px;
-  color: var(--subtle); font-size: 13px;
+  min-height: 140px; color: var(--subtle); font-size: 13px;
 }
-.timeline-clips { display: flex; gap: 4px; align-items: stretch; }
-.clip-block {
-  display: flex; flex-direction: column; justify-content: flex-end;
-  padding: 5px 7px;
-  border-radius: 5px;
-  min-width: 56px; height: 56px;
-  cursor: pointer;
-  user-select: none;
-  border: 2px solid transparent;
-  transition: border-color 0.1s, opacity 0.1s;
-  overflow: hidden;
+/* zoom controls */
+.tl-controls {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--border);
+}
+.tl-zoom-lbl { font-size: 11px; color: var(--subtle); min-width: 34px; text-align: center; }
+.tl-sep { width: 1px; height: 16px; background: var(--border); margin: 0 2px; }
+/* two-column body: fixed labels + scrollable tracks */
+.tl-body { display: flex; }
+.tl-label-col {
+  width: 56px; flex-shrink: 0;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--border);
+}
+.tl-lbl {
+  display: flex; align-items: center; justify-content: flex-end;
+  padding: 0 7px;
+  font-size: 9px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--subtle);
+  border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.clip-block:hover { opacity: 0.82; }
-.clip-block.selected { border-color: #fff; }
-.clip-block.portrait  { background: var(--portrait); }
-.clip-block.landscape { background: var(--landscape); }
+.tl-lbl:last-child { border-bottom: none; }
+.tl-lbl.h-ruler   { height: 20px; }
+.tl-lbl.h-video   { height: 156px; }
+.tl-lbl.h-music   { height: 34px; }
+.tl-lbl.h-overlay { height: 24px; }
+/* scrollable area */
+.tl-scroll { flex: 1; overflow-x: auto; overflow-y: hidden; user-select: none; }
+.tl-row { position: relative; border-bottom: 1px solid var(--border); }
+.tl-row:last-child { border-bottom: none; }
+.tl-row.h-ruler   { height: 20px; }
+.tl-row.h-video   { height: 156px; }
+.tl-row.h-music   { height: 34px; }
+.tl-row.h-overlay { height: 24px; }
+/* ruler */
+.tl-tick {
+  position: absolute; bottom: 0;
+  width: 1px; height: 7px; background: var(--border);
+}
+.tl-tick-lbl {
+  position: absolute; top: 2px; left: 3px;
+  font-size: 9px; color: var(--subtle); white-space: nowrap; pointer-events: none;
+}
+/* clip blocks */
+.clip-block {
+  position: absolute; top: 4px; bottom: 4px;
+  border-radius: 4px; border: 2px solid transparent;
+  cursor: pointer; overflow: hidden; isolation: isolate;
+  background-size: cover; background-position: center;
+  transition: border-color 0.1s;
+}
+.clip-block::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0.1) 60%);
+  z-index: 1; pointer-events: none;
+}
+.clip-block:hover { border-color: rgba(255,255,255,0.25); }
+.clip-block.selected { border-color: #fff !important; }
+.clip-block.portrait  { background-color: var(--portrait); }
+.clip-block.landscape { background-color: var(--landscape); }
 .clip-block.dragging  { opacity: 0.3; }
-.clip-block.drag-over { border-color: var(--accent); }
-.clip-name { font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.85); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.clip-dur  { font-size: 10px; color: rgba(255,255,255,0.5); margin-top: 2px; }
+.clip-block.drag-target { border-color: var(--accent) !important; }
+.clip-info { position: absolute; bottom: 4px; left: 5px; right: 5px; z-index: 2; }
+.clip-name { font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.clip-dur  { font-size: 9px; color: rgba(255,255,255,0.55); }
+/* music blocks */
+.music-block {
+  position: absolute; top: 3px; bottom: 3px;
+  border-radius: 4px; background: #1a4a3a; border: 1px solid #2d6e56;
+  overflow: hidden; padding: 2px 6px;
+  display: flex; flex-direction: column; justify-content: center;
+}
+.music-name { font-size: 10px; color: rgba(255,255,255,0.8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.music-dur  { font-size: 9px; color: rgba(100,180,140,0.6); }
+/* countdown blocks */
+.cdown-block {
+  position: absolute; top: 2px; bottom: 2px;
+  border-radius: 3px; background: rgba(255,159,10,0.18);
+  border: 1px solid rgba(255,159,10,0.45);
+  overflow: hidden; display: flex; align-items: center;
+}
+.cdown-label { font-size: 9px; color: rgba(255,159,10,0.85); padding: 0 4px; white-space: nowrap; overflow: hidden; }
+/* change-point markers */
+.cp-line {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: rgba(255,159,10,0.35); pointer-events: none;
+}
 
 /* ── Clip editor ── */
 .clip-editor {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 11px 14px;
-  margin-bottom: 8px;
-  display: none;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; padding: 11px 14px; margin-bottom: 8px; display: none;
 }
 .clip-editor.open { display: block; }
-.clip-editor-title {
-  font-size: 13px; font-weight: 600;
-  margin-bottom: 10px;
-  word-break: break-all;
-}
+.clip-editor-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; word-break: break-all; }
 .clip-editor-fields { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .ce-field { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .ce-field label { color: var(--subtle); }
 .ce-field input {
-  width: 76px;
-  background: var(--bg); border: 1px solid var(--border);
-  border-radius: 5px; color: var(--text);
-  padding: 4px 8px; font-size: 13px; font-family: inherit; outline: none;
+  width: 76px; background: var(--bg); border: 1px solid var(--border);
+  border-radius: 5px; color: var(--text); padding: 4px 8px;
+  font-size: 13px; font-family: inherit; outline: none;
 }
 .ce-field input:focus { border-color: var(--accent); }
-.badge {
-  display: inline-block;
-  padding: 2px 8px; border-radius: 4px;
-  font-size: 11px; font-weight: 600;
-}
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
 .badge.portrait  { background: var(--portrait);  color: #c4a7ff; }
 .badge.landscape { background: var(--landscape); color: #7eb8ff; }
 
 /* ── JSON toggle / editor ── */
 .json-toggle-row { padding: 4px 0 2px; }
 .json-toggle {
-  background: none; border: none;
-  color: var(--subtle); font-size: 12px; font-family: inherit;
-  cursor: pointer; padding: 2px 0;
+  background: none; border: none; color: var(--subtle);
+  font-size: 12px; font-family: inherit; cursor: pointer; padding: 2px 0;
   display: flex; align-items: center; gap: 5px;
 }
 .json-toggle:hover { color: var(--text); }
@@ -242,25 +244,16 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 .json-editor-wrap textarea {
   width: 100%; height: 180px;
   background: var(--panel); border: 1px solid var(--border);
-  border-radius: 8px; color: var(--text);
-  padding: 10px 12px;
+  border-radius: 8px; color: var(--text); padding: 10px 12px;
   font-family: 'Menlo', 'Monaco', 'Courier New', monospace;
-  font-size: 11.5px; line-height: 1.5;
-  resize: vertical; outline: none;
+  font-size: 11.5px; line-height: 1.5; resize: vertical; outline: none;
 }
 .json-editor-wrap textarea:focus { border-color: var(--accent); }
 
 /* ── Log ── */
 .log-section { margin-top: 20px; border-top: 1px solid var(--border); padding-top: 14px; }
-.log-hdr {
-  display: flex; align-items: center;
-  justify-content: space-between; margin-bottom: 8px;
-}
-.log-hdr h2 {
-  font-size: 11px; font-weight: 700;
-  text-transform: uppercase; letter-spacing: 0.06em;
-  color: var(--subtle);
-}
+.log-hdr { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.log-hdr h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--subtle); }
 .log-output {
   background: var(--panel); border: 1px solid var(--border);
   border-radius: 8px; padding: 10px 12px;
@@ -278,13 +271,12 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 <body>
 <div class="container">
 
-  <!-- Header -->
   <div class="header">
-    <h1>🎬 Video Mixer</h1>
-    <p>Combines landscape &amp; portrait clips into one landscape video.</p>
+    <h1>🎬 Amyleor</h1>
+    <p>Takes folders of videos and combines clips, synced with music and countdowns, to help structure your amyl experience.</p>
+    <p>If your video folder includes subfolders, each subfolder becomes a section. Use "Subfolder split" to control how time is divided between them (equal, by video count, or by total video length).</p>
   </div>
 
-  <!-- Source & Destination -->
   <details open>
     <summary>Source &amp; Destination</summary>
     <div class="section-body">
@@ -306,10 +298,13 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
     </div>
   </details>
 
-  <!-- Settings -->
   <details>
     <summary>Settings</summary>
     <div class="section-body">
+      <div class="form-row">
+        <input type="checkbox" id="use_all" onchange="toggleUseAll(this.checked)">
+        <label for="use_all">Use all videos (no target duration)</label>
+      </div>
       <div class="form-row">
         <label class="fixed">Target duration</label>
         <input type="number" id="duration" class="short" value="60" min="1">
@@ -332,10 +327,24 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
         <label for="use_seed" style="width:140px">Fixed random seed</label>
         <input type="number" id="seed" class="short" value="42" disabled>
       </div>
+      <div class="form-row">
+        <label class="fixed">Clip order</label>
+        <select id="clip_order">
+          <option value="random">Random</option>
+          <option value="intensity">By intensity (chill → intense)</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label class="fixed">Subfolder split</label>
+        <select id="subfolder_split">
+          <option value="equal">Equal (same duration per folder)</option>
+          <option value="by_count">By count (∝ number of videos)</option>
+          <option value="by_duration">By duration (∝ total video length)</option>
+        </select>
+      </div>
     </div>
   </details>
 
-  <!-- Music -->
   <details>
     <summary>Music</summary>
     <div class="section-body">
@@ -356,7 +365,6 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
     </div>
   </details>
 
-  <!-- Countdown Overlay -->
   <details>
     <summary>Countdown Overlay</summary>
     <div class="section-body">
@@ -406,7 +414,6 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
     </div>
   </details>
 
-  <!-- Action bar -->
   <div class="action-bar">
     <div class="btn-group">
       <button class="btn muted" id="btn-plan" onclick="startPlan()">Plan Video</button>
@@ -421,7 +428,6 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
     </div>
   </div>
 
-  <!-- Plan header -->
   <div class="plan-hdr">
     <h2>Plan</h2>
     <div class="btn-group">
@@ -431,9 +437,33 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
   </div>
 
   <!-- Timeline -->
-  <div class="timeline-wrap" id="timeline-wrap">
-    <div class="timeline-empty" id="tl-empty">No plan yet — click "Plan Video" to generate one.</div>
-    <div class="timeline-clips" id="tl-clips" style="display:none"></div>
+  <div class="tl-wrap">
+    <div class="tl-empty" id="tl-empty">No plan yet — click "Plan Video" to generate one.</div>
+    <div id="tl-active" style="display:none">
+      <!-- Zoom controls -->
+      <div class="tl-controls">
+        <button class="btn sm" onclick="zoomOut()" title="Zoom out">−</button>
+        <span class="tl-zoom-lbl" id="tl-zoom-lbl">Fit</span>
+        <button class="btn sm" onclick="zoomIn()" title="Zoom in">+</button>
+        <div class="tl-sep"></div>
+        <button class="btn sm" onclick="zoomFit()">Fit</button>
+      </div>
+      <!-- Label column + scrollable tracks -->
+      <div class="tl-body">
+        <div class="tl-label-col">
+          <div class="tl-lbl h-ruler"></div>
+          <div class="tl-lbl h-video">Video</div>
+          <div class="tl-lbl h-music"  id="lbl-music"   style="display:none">Music</div>
+          <div class="tl-lbl h-overlay" id="lbl-overlay" style="display:none">Overlay</div>
+        </div>
+        <div class="tl-scroll" id="tl-scroll">
+          <div class="tl-row h-ruler"   id="tl-ruler"></div>
+          <div class="tl-row h-video"   id="tl-video"></div>
+          <div class="tl-row h-music"   id="tl-music-row"   style="display:none"><div id="tl-music"   style="position:relative;height:100%"></div></div>
+          <div class="tl-row h-overlay" id="tl-overlay-row" style="display:none"><div id="tl-overlay" style="position:relative;height:100%"></div></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- Clip editor -->
@@ -457,7 +487,6 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
     </div>
   </div>
 
-  <!-- JSON toggle -->
   <div class="json-toggle-row">
     <button class="json-toggle" id="json-toggle" onclick="toggleJson()">▶ Show JSON</button>
   </div>
@@ -466,7 +495,6 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
               oninput="scheduleJsonSync()"></textarea>
   </div>
 
-  <!-- Log -->
   <div class="log-section">
     <div class="log-hdr">
       <h2>Log</h2>
@@ -479,17 +507,20 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 <script>
 // ── State ──────────────────────────────────────────────────────────────────
 
-let plan = null;
-let selIdx = -1;
-let es = null;           // EventSource
+let plan     = null;
+let selIdx   = -1;
+let es       = null;
 let jsonOpen = false;
 let jsonTimer = null;
+let pxPerSec  = null;   // null = auto-fit on next render
+let dragSrcIdx = null;
 
-// ── Settings fields ────────────────────────────────────────────────────────
+// ── Settings ───────────────────────────────────────────────────────────────
 
 const FIELDS = [
   'input','output','music','duration',
   'use_max','max_clip','use_fade','fade_dur','use_seed','seed',
+  'clip_order','subfolder_split','use_all',
   'music_vol','beat_sync','beats_per_clip',
   'use_countdown','cd_corner','cd_dur','cd_ivmin','cd_ivmax',
   'cd_text1','cd_text1_dur','cd_text2','cd_text2_dur','cd_sync',
@@ -504,10 +535,11 @@ async function loadSettings() {
       if (el.type === 'checkbox') el.checked = Boolean(data[id]);
       else el.value = data[id];
     }
-    toggleEl('max_clip',  document.getElementById('use_max').checked);
-    toggleEl('fade_dur',  document.getElementById('use_fade').checked);
-    toggleEl('seed',      document.getElementById('use_seed').checked);
-    toggleCountdown(      document.getElementById('use_countdown').checked);
+    toggleEl('max_clip', document.getElementById('use_max').checked);
+    toggleEl('fade_dur', document.getElementById('use_fade').checked);
+    toggleEl('seed',     document.getElementById('use_seed').checked);
+    toggleUseAll(        document.getElementById('use_all').checked);
+    toggleCountdown(     document.getElementById('use_countdown').checked);
   } catch(e) { console.warn('settings load failed', e); }
 }
 
@@ -524,23 +556,18 @@ function getSettings() {
 async function saveSettings() {
   try {
     await fetch('/api/settings', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
+      method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify(getSettings()),
     });
   } catch(e) {}
 }
 
-document.addEventListener('change', e => {
-  if (e.target.matches('input, select')) saveSettings();
-});
+document.addEventListener('change', e => { if (e.target.matches('input, select')) saveSettings(); });
 
 // ── Toggles ────────────────────────────────────────────────────────────────
 
-function toggleEl(id, on) {
-  const el = document.getElementById(id);
-  if (el) el.disabled = !on;
-}
+function toggleEl(id, on) { const el = document.getElementById(id); if (el) el.disabled = !on; }
+function toggleUseAll(on) { toggleEl('duration', !on); }
 function toggleCountdown(on) {
   const f = document.getElementById('cd-fields');
   f.style.opacity = on ? '1' : '0.38';
@@ -553,22 +580,17 @@ async function browse(fieldId, type) {
   const ep = type === 'folder' ? '/api/browse/folder' : '/api/browse/savefile';
   try {
     const data = await (await fetch(ep, {method:'POST'})).json();
-    if (data.path) {
-      document.getElementById(fieldId).value = data.path;
-      saveSettings();
-    }
+    if (data.path) { document.getElementById(fieldId).value = data.path; saveSettings(); }
   } catch(e) { console.error(e); }
 }
 
-// ── Running state ──────────────────────────────────────────────────────────
+// ── Job state ──────────────────────────────────────────────────────────────
 
 function setRunning(on) {
   document.getElementById('btn-plan').disabled     = on;
   document.getElementById('btn-cancel').disabled   = !on;
   document.getElementById('btn-generate').disabled = on || !plan;
 }
-
-// ── SSE stream ─────────────────────────────────────────────────────────────
 
 function openStream(jobId) {
   if (es) es.close();
@@ -588,19 +610,13 @@ function handleEvent(ev) {
       document.getElementById('btn-save').disabled = false;
       break;
     case 'done':
-      setRunning(false);
-      if (es) { es.close(); es = null; }
-      break;
+      setRunning(false); if (es) { es.close(); es = null; } break;
     case 'error':
       appendLog('❌  ' + ev.msg, 'error');
       document.getElementById('status-text').textContent = 'Failed';
-      setRunning(false);
-      if (es) { es.close(); es = null; }
-      break;
+      setRunning(false); if (es) { es.close(); es = null; } break;
   }
 }
-
-// ── Plan / Generate / Cancel ───────────────────────────────────────────────
 
 async function startPlan() {
   const s = getSettings();
@@ -629,14 +645,11 @@ async function startGenerate() {
   } catch(e) { appendLog('❌  ' + e.message, 'error'); setRunning(false); }
 }
 
-async function cancelJob() {
-  await fetch('/api/cancel', {method:'POST'});
-}
+async function cancelJob() { await fetch('/api/cancel', {method:'POST'}); }
 
 async function post(url, body) {
   const r = await fetch(url, {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
+    method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify(body),
   });
   return r.json();
@@ -645,90 +658,216 @@ async function post(url, body) {
 // ── Plan state ─────────────────────────────────────────────────────────────
 
 function setPlan(p) {
-  plan = p;
-  selIdx = -1;
-  renderTimeline();
-  renderEditor();
+  plan = p; selIdx = -1; pxPerSec = null;
+  renderTimeline(); renderEditor();
   if (jsonOpen) syncToJson();
 }
 
-// ── Timeline ───────────────────────────────────────────────────────────────
+// ── Zoom ───────────────────────────────────────────────────────────────────
+
+function totalDur() {
+  return plan && plan.clips ? plan.clips.reduce((s, c) => s + c.duration, 0) : 0;
+}
+
+function fitPps() {
+  const scr = document.getElementById('tl-scroll');
+  const dur = totalDur();
+  return scr && dur > 0 ? Math.max(2, (scr.clientWidth - 2) / dur) : 10;
+}
+
+function zoomIn()  { if (!plan) return; pxPerSec = Math.min((pxPerSec ?? fitPps()) * 1.5, 600); renderTimeline(); }
+function zoomOut() { if (!plan) return; pxPerSec = Math.max((pxPerSec ?? fitPps()) / 1.5, Math.max(1, fitPps() * 0.2)); renderTimeline(); }
+function zoomFit() { pxPerSec = null; renderTimeline(); }
+
+function updateZoomLabel() {
+  const fit = fitPps(), cur = pxPerSec ?? fit;
+  const ratio = cur / fit;
+  document.getElementById('tl-zoom-lbl').textContent =
+    ratio >= 0.98 && ratio <= 1.02 ? 'Fit' : ratio.toFixed(1) + '×';
+}
+
+// ── Timeline render ────────────────────────────────────────────────────────
 
 function renderTimeline() {
-  const empty  = document.getElementById('tl-empty');
-  const clips  = document.getElementById('tl-clips');
+  const dur = totalDur();
+  document.getElementById('tl-empty').style.display  = (!plan || dur <= 0) ? 'flex' : 'none';
+  document.getElementById('tl-active').style.display = (!plan || dur <= 0) ? 'none' : 'block';
+  if (!plan || dur <= 0) return;
 
-  if (!plan || !plan.clips || plan.clips.length === 0) {
-    empty.style.display  = 'flex';
-    clips.style.display  = 'none';
-    return;
+  if (pxPerSec === null) pxPerSec = fitPps();
+  const W = Math.max(1, Math.round(pxPerSec * dur));
+
+  updateZoomLabel();
+  renderRuler(dur, W);
+  renderVideoTrack(dur, W);
+  renderMusicTrack(dur, W);
+  renderOverlayTrack(dur, W);
+}
+
+// Time ruler
+function renderRuler(dur, W) {
+  const el = document.getElementById('tl-ruler');
+  el.style.width = W + 'px';
+  el.innerHTML = '';
+  const INTERVALS = [1,2,5,10,15,30,60,120,300,600];
+  const interval = INTERVALS.find(i => i * pxPerSec >= 44) || 600;
+  for (let t = 0; t <= dur + 0.01; t += interval) {
+    if (t > dur * 1.02) break;
+    const x = Math.round(t * pxPerSec);
+    const tick = document.createElement('div');
+    tick.className = 'tl-tick'; tick.style.left = x + 'px';
+    el.appendChild(tick);
+    const lbl = document.createElement('div');
+    lbl.className = 'tl-tick-lbl'; lbl.style.left = x + 'px';
+    lbl.textContent = fmtTime(t);
+    el.appendChild(lbl);
   }
-  empty.style.display = 'none';
-  clips.style.display = 'flex';
-  clips.innerHTML = '';
+  addCpLines(el, dur);
+}
 
-  const total = plan.clips.reduce((s, c) => s + c.duration, 0);
-  const avail = document.getElementById('timeline-wrap').clientWidth - 24;
-  const MIN_W = 56;
+function fmtTime(s) {
+  s = Math.round(s);
+  return s < 60 ? s + 's' : Math.floor(s/60) + ':' + String(s%60).padStart(2,'0');
+}
 
+// Video track
+function renderVideoTrack(dur, W) {
+  const el = document.getElementById('tl-video');
+  el.style.width = W + 'px';
+  el.innerHTML = '';
+  if (!plan || !plan.clips) return;
+  let t = 0;
   plan.clips.forEach((clip, idx) => {
     const portrait = clip.height > clip.width;
-    const w = Math.max(MIN_W, Math.round((clip.duration / total) * avail));
+    const x = Math.round(t * pxPerSec);
+    const w = Math.max(4, Math.round(clip.duration * pxPerSec) - 2);
     const name = clip.path.split('/').pop();
 
-    const el = document.createElement('div');
-    el.className = `clip-block ${portrait ? 'portrait' : 'landscape'}${idx === selIdx ? ' selected' : ''}`;
-    el.style.width = w + 'px';
-    el.dataset.idx = idx;
-    el.innerHTML = `<div class="clip-name">${escHtml(name)}</div><div class="clip-dur">${clip.duration.toFixed(1)}s</div>`;
+    const block = document.createElement('div');
+    block.className = `clip-block ${portrait ? 'portrait' : 'landscape'}${idx === selIdx ? ' selected' : ''}`;
+    block.style.cssText = `left:${x}px;width:${w}px`;
+    block.dataset.idx = idx;
+    block.title = clip.path + '\n⌦ Double-click to open';
+    block.style.backgroundImage =
+      `url('/api/thumbnail?path=${encodeURIComponent(clip.path)}&time=${clip.start}')`;
 
-    el.addEventListener('click', () => selectClip(idx));
+    if (w > 32) {
+      block.innerHTML =
+        `<div class="clip-info"><div class="clip-name">${escHtml(name)}</div>` +
+        `<div class="clip-dur">${clip.duration.toFixed(1)}s</div></div>`;
+    }
 
-    // Drag to reorder
-    el.draggable = true;
-    el.addEventListener('dragstart', e => {
-      el.classList.add('dragging');
+    block.addEventListener('click', e => { if (!e.detail || e.detail < 2) selectClip(idx); });
+    block.addEventListener('dblclick', () => openFile(clip.path));
+
+    block.draggable = true;
+    block.addEventListener('dragstart', e => {
+      dragSrcIdx = idx; block.classList.add('dragging');
       e.dataTransfer.effectAllowed = 'move';
-      e.dataTransfer.setData('text/plain', String(idx));
     });
-    el.addEventListener('dragend', () => el.classList.remove('dragging'));
-    el.addEventListener('dragover', e => { e.preventDefault(); el.classList.add('drag-over'); });
-    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
-    el.addEventListener('drop', e => {
-      e.preventDefault();
-      el.classList.remove('drag-over');
-      const src = parseInt(e.dataTransfer.getData('text/plain'));
-      const dst = parseInt(el.dataset.idx);
-      if (src !== dst) {
+    block.addEventListener('dragend',  () => { block.classList.remove('dragging'); dragSrcIdx = null; });
+    block.addEventListener('dragover', e => { e.preventDefault(); block.classList.add('drag-target'); });
+    block.addEventListener('dragleave',() => block.classList.remove('drag-target'));
+    block.addEventListener('drop', e => {
+      e.preventDefault(); block.classList.remove('drag-target');
+      const src = dragSrcIdx, dst = parseInt(block.dataset.idx);
+      if (src !== null && src !== dst) {
         const arr = [...plan.clips];
         const [moved] = arr.splice(src, 1);
         arr.splice(dst, 0, moved);
-        plan.clips = arr;
-        selIdx = dst;
-        renderTimeline();
-        renderEditor();
+        plan.clips = arr; selIdx = dst;
+        renderTimeline(); renderEditor();
         if (jsonOpen) syncToJson();
       }
     });
 
-    clips.appendChild(el);
+    el.appendChild(block);
+    t += clip.duration;
   });
+  addCpLines(el, dur);
 }
 
-function selectClip(idx) {
-  selIdx = idx;
-  renderTimeline();
-  renderEditor();
+// Music track
+function renderMusicTrack(dur, W) {
+  const hasMusic = plan && plan.music && plan.music.length > 0;
+  document.getElementById('tl-music-row').style.display  = hasMusic ? 'block' : 'none';
+  document.getElementById('lbl-music').style.display     = hasMusic ? 'flex'  : 'none';
+  if (!hasMusic) return;
+
+  const el = document.getElementById('tl-music');
+  el.style.width = W + 'px';
+  el.innerHTML = '';
+  let t = 0;
+  for (const track of plan.music) {
+    if (t >= dur) break;
+    const x = Math.round(t * pxPerSec);
+    const trackDur = Math.min(track.duration, dur - t);
+    const w = Math.max(2, Math.round(trackDur * pxPerSec) - 2);
+    const name = track.path.split('/').pop();
+    const block = document.createElement('div');
+    block.className = 'music-block';
+    block.style.cssText = `left:${x}px;width:${w}px`;
+    block.title = track.path;
+    if (w > 40) {
+      block.innerHTML = `<div class="music-name">${escHtml(name)}</div><div class="music-dur">${track.duration.toFixed(1)}s</div>`;
+    }
+    el.appendChild(block);
+    t += track.duration;
+  }
+  addCpLines(el, dur);
 }
 
-// ── Clip editor ────────────────────────────────────────────────────────────
+// Overlay track (approximate countdown positions + change-point markers)
+function renderOverlayTrack(dur, W) {
+  const hasOverlay = plan && plan.countdown;
+  document.getElementById('tl-overlay-row').style.display  = hasOverlay ? 'block' : 'none';
+  document.getElementById('lbl-overlay').style.display     = hasOverlay ? 'flex'  : 'none';
+  if (!hasOverlay) return;
+
+  const el = document.getElementById('tl-overlay');
+  el.style.width = W + 'px';
+  el.innerHTML = '';
+  const cd = plan.countdown;
+  const eventDur = parseFloat(cd.dur)
+    + (cd.text1 ? parseFloat(cd.text1_dur) : 0)
+    + (cd.text2 ? parseFloat(cd.text2_dur) : 0);
+  const interval = (parseFloat(cd.iv_min) + parseFloat(cd.iv_max)) / 2;
+
+  let t = interval;
+  while (t < dur) {
+    const x = Math.round(t * pxPerSec);
+    const w = Math.max(3, Math.round(eventDur * pxPerSec) - 1);
+    const block = document.createElement('div');
+    block.className = 'cdown-block';
+    block.style.cssText = `left:${x}px;width:${w}px`;
+    block.title = `Countdown ~${cd.dur}s`;
+    if (w > 18) block.innerHTML = `<span class="cdown-label">${cd.dur}s</span>`;
+    el.appendChild(block);
+    t += interval + eventDur;
+  }
+  addCpLines(el, dur);
+}
+
+// Change-point lines (added to any track element)
+function addCpLines(container, dur) {
+  const cps = (plan && plan.countdown && plan.countdown.change_points) || [];
+  for (const cp of cps) {
+    if (cp > dur) continue;
+    const line = document.createElement('div');
+    line.className = 'cp-line';
+    line.style.left = Math.round(cp * pxPerSec) + 'px';
+    line.title = `Change point @ ${fmtTime(cp)}`;
+    container.appendChild(line);
+  }
+}
+
+// ── Clip selection & editor ────────────────────────────────────────────────
+
+function selectClip(idx) { selIdx = idx; renderTimeline(); renderEditor(); }
 
 function renderEditor() {
   const ed = document.getElementById('clip-editor');
-  if (selIdx < 0 || !plan || selIdx >= plan.clips.length) {
-    ed.classList.remove('open');
-    return;
-  }
+  if (selIdx < 0 || !plan || selIdx >= plan.clips.length) { ed.classList.remove('open'); return; }
   const c = plan.clips[selIdx];
   const portrait = c.height > c.width;
   document.getElementById('ce-name').textContent = c.path.split('/').pop();
@@ -751,9 +890,17 @@ function removeClip() {
   if (selIdx < 0 || !plan) return;
   plan.clips.splice(selIdx, 1);
   selIdx = plan.clips.length === 0 ? -1 : Math.min(selIdx, plan.clips.length - 1);
-  renderTimeline();
-  renderEditor();
+  renderTimeline(); renderEditor();
   if (jsonOpen) syncToJson();
+}
+
+// ── Open file ──────────────────────────────────────────────────────────────
+
+async function openFile(path) {
+  await fetch('/api/open', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({path}),
+  });
 }
 
 // ── JSON editor ────────────────────────────────────────────────────────────
@@ -761,8 +908,7 @@ function removeClip() {
 function toggleJson() {
   jsonOpen = !jsonOpen;
   document.getElementById('json-wrap').classList.toggle('open', jsonOpen);
-  const btn = document.getElementById('json-toggle');
-  btn.textContent = (jsonOpen ? '▼ Hide' : '▶ Show') + ' JSON';
+  document.getElementById('json-toggle').textContent = (jsonOpen ? '▼ Hide' : '▶ Show') + ' JSON';
   if (jsonOpen && plan) syncToJson();
 }
 
@@ -779,9 +925,7 @@ function scheduleJsonSync() {
   jsonTimer = setTimeout(() => {
     try {
       const parsed = JSON.parse(document.getElementById('json-ta').value);
-      plan = parsed;
-      renderTimeline();
-      renderEditor();
+      plan = parsed; renderTimeline(); renderEditor();
     } catch(_) {}
   }, 400);
 }
@@ -792,11 +936,9 @@ function loadPlan() {
   const inp = document.createElement('input');
   inp.type = 'file'; inp.accept = '.json';
   inp.onchange = async () => {
-    const file = inp.files[0];
-    if (!file) return;
+    const file = inp.files[0]; if (!file) return;
     try {
-      const p = JSON.parse(await file.text());
-      setPlan(p);
+      setPlan(JSON.parse(await file.text()));
       document.getElementById('btn-generate').disabled = false;
       document.getElementById('btn-save').disabled = false;
       appendLog(`✓  Loaded: ${file.name}`, 'success');
@@ -807,12 +949,9 @@ function loadPlan() {
 
 function savePlan() {
   if (!plan) return;
-  const blob = new Blob([JSON.stringify(plan, null, 2)], {type:'application/json'});
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'video_plan.json';
-  a.click();
-  URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(plan,null,2)], {type:'application/json'}));
+  a.download = 'video_plan.json'; a.click(); URL.revokeObjectURL(a.href);
 }
 
 // ── Log ────────────────────────────────────────────────────────────────────
@@ -830,9 +969,7 @@ function clearLog() { document.getElementById('log').innerHTML = ''; }
 
 // ── Util ───────────────────────────────────────────────────────────────────
 
-function escHtml(s) {
-  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-}
+function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 // ── Init ───────────────────────────────────────────────────────────────────
 

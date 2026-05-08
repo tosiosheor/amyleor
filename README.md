@@ -34,7 +34,7 @@ Scale-to-fill + centre-crop to 16:9. Handles 4:3, ultra-wide, and other aspect r
 
 - Clips without audio get a silent audio track injected automatically so the concat is seamless.
 - **Max clip length**: when a source video is longer than the limit, the script finds the most highlight-dense window (highest scene-change density at 160 px wide) and uses that section. Falls back to the end of the file if analysis fails.
-- **Target duration**: clips are added until the target is met or just exceeded — the last clip always plays in full, never cut off.
+- **Target duration**: clips are added until the target is met or just exceeded — the last clip always plays in full, never cut off. Enable "Use all videos" to skip the target and include every file exactly once instead.
 - **Fixed seed**: reproduce the same random order for re-exporting with tweaked settings.
 
 ---
@@ -67,7 +67,17 @@ Text rendering: white, 90 px, 5 px black border. Countdown uses FFmpeg's `%{eif\
 
 ### Subfolder support
 
-If the input folder contains 2+ subfolders with videos, the output is built in folder order with equal time per folder (e.g. folders A, B, C with a 9-minute target → ~3 min each). Section boundaries snap to the nearest musical change point within ±60 s of the equal split. Each subfolder's video cache is stored independently. Beat-sync index threads across sections so cuts stay beat-aligned throughout.
+If the input folder contains 2+ subfolders with videos, the output is built in folder order with each subfolder as its own section. Section boundaries snap to the nearest musical change point within ±60 s of the target split. Each subfolder's video cache is stored independently. Beat-sync index threads across sections so cuts stay beat-aligned throughout.
+
+**Subfolder split modes** (Settings → "Subfolder split"):
+
+| Mode | Behaviour |
+|---|---|
+| Equal | Every folder gets the same share of the target duration (e.g. 3 folders, 9 min target → ~3 min each) |
+| By count | Each folder's share is proportional to how many video files it contains |
+| By duration | Each folder's share is proportional to the total raw video length it contains |
+
+**Use all videos** (Settings → "Use all videos" checkbox): ignores the target duration entirely and includes every video file exactly once (capped at "Max clip length" if set). Works in both flat and subfolder modes. In subfolder mode the section split mode still determines change-point snapping proportions.
 
 ### Settings file / instruction set
 
@@ -146,7 +156,7 @@ browser  ──HTTP/SSE──►  server.py (FastAPI + uvicorn)
 | `get_music_energy` | `audio.py` | ffmpeg `astats` RMS loudness for chill→intense track ordering |
 | `detect_beats` | `audio.py` | librosa beat tracking with cache |
 | `detect_change_points` | `analysis.py` | librosa onset-strength z-score for music build/drop detection |
-| `_compute_section_boundaries` | `analysis.py` | Snaps equal-time subfolder splits to musical change points |
+| `_compute_section_boundaries` | `analysis.py` | Snaps proportional subfolder section boundaries to musical change points; accepts optional `weights` for equal/by-count/by-duration splits |
 | `build_countdown_events` | `overlay.py` | Returns `(start, end, text)` tuples for all overlay segments, optionally music-synced |
 | `apply_countdown_overlay` | `overlay.py` | Re-encodes final video with Pillow-rendered PNG overlays burned in |
 | `_filter` | `video.py` | Builds the FFmpeg filtergraph for a single clip (portrait or landscape) |

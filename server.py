@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 
 import pipeline
 from constants import SETTINGS_FILE
@@ -40,6 +40,9 @@ _DEFAULT_SETTINGS = {
     "music_vol": "30",
     "beat_sync": True,
     "beats_per_clip": "8",
+    "clip_order": "random",
+    "subfolder_split": "equal",
+    "use_all": False,
     "use_countdown": False,
     "cd_corner": "top-right",
     "cd_dur": "5",
@@ -142,6 +145,52 @@ async def browse_savefile():
     return {"path": path}
 
 
+# ── Thumbnail ────────────────────────────────────────────────────────────────
+
+_thumb_cache: dict[tuple[str, float], bytes] = {}
+
+
+@app.get("/api/thumbnail")
+async def thumbnail(path: str, time: float = 0.0):
+    key = (path, round(time, 2))
+    if key in _thumb_cache:
+        return Response(content=_thumb_cache[key], media_type="image/jpeg",
+                        headers={"Cache-Control": "max-age=3600"})
+
+    def _grab() -> Optional[bytes]:
+        result = subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(time), "-i", path,
+             "-vframes", "1", "-vf", "scale=200:-1",
+             "-f", "image2", "-vcodec", "mjpeg", "pipe:1"],
+            capture_output=True, timeout=15,
+        )
+        return result.stdout if result.returncode == 0 and result.stdout else None
+
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(None, _grab)
+    if not data:
+        return Response(status_code=404)
+    _thumb_cache[key] = data
+    return Response(content=data, media_type="image/jpeg",
+                    headers={"Cache-Control": "max-age=3600"})
+
+
+# ── Open file ─────────────────────────────────────────────────────────────────
+
+@app.post("/api/open")
+async def open_path(request: Request):
+    data = await request.json()
+    path = data.get("path", "")
+    if path:
+        if sys.platform == "darwin":
+            subprocess.run(["open", path], check=False)
+        elif sys.platform == "win32":
+            subprocess.run(["start", "", path], shell=True, check=False)
+        else:
+            subprocess.run(["xdg-open", path], check=False)
+    return {"ok": True}
+
+
 # ── SSE streaming ─────────────────────────────────────────────────────────────
 
 @app.get("/api/stream/{job_id}")
@@ -179,6 +228,10 @@ def _parse_settings(s: dict) -> dict:
     beats_per_clip = int(s.get("beats_per_clip", 8))
     beat_sync = bool(s.get("beat_sync", True))
 
+    clip_order = s.get("clip_order", "random")
+    subfolder_split = s.get("subfolder_split", "equal")
+    use_all = bool(s.get("use_all", False))
+
     countdown_cfg = None
     if s.get("use_countdown"):
         text1 = s.get("cd_text1", "").strip()
@@ -207,6 +260,9 @@ def _parse_settings(s: dict) -> dict:
         beat_sync=beat_sync,
         beats_per_clip=beats_per_clip,
         countdown_cfg=countdown_cfg,
+        clip_order=clip_order,
+        subfolder_split=subfolder_split,
+        use_all=use_all,
     )
 
 

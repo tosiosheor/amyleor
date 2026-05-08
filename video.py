@@ -19,9 +19,9 @@ def _filter(width, height, has_audio, audio_input_index, motion=None):
             bg_scale_h += 1
         bg_y = max(0, min(round((bg_scale_h - OUT_H) * y_frac), bg_scale_h - OUT_H))
 
-        if confidence >= 0.7:
+        if confidence >= 0.5:
             blur = ""
-        elif confidence >= 0.4:
+        elif confidence >= 0.2:
             blur = ",boxblur=luma_radius=14:luma_power=2"
         else:
             blur = ",boxblur=luma_radius=28:luma_power=3"
@@ -32,9 +32,18 @@ def _filter(width, height, has_audio, audio_input_index, motion=None):
             f"{blur}"
         )
 
-        # Shift foreground horizontally opposite to motion centre (max ±320 px)
-        shift = round((0.5 - x_frac) * (OUT_W // 3))
         fg = f"scale=-2:{OUT_H}"
+
+        if blur == "":
+            # No blur: push the portrait clip to the side so the background fill is visible.
+            fg_w = OUT_H * width // height
+            if fg_w % 2:
+                fg_w += 1
+            max_shift = (OUT_W - fg_w) // 2 - 8
+            shift = max_shift if x_frac >= 0.5 else -max_shift
+        else:
+            # Blurred background: minor shift toward motion centre (max ±320 px)
+            shift = round((0.5 - x_frac) * (OUT_W // 3))
         fc = (
             f"[0:v]split[raw1][raw2];"
             f"[raw1]{bg}[bg];"
