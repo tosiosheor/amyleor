@@ -696,6 +696,19 @@ def do_analyse(
     return plan
 
 
+def _unique_path(path):
+    p = Path(path)
+    if not p.exists():
+        return str(p)
+    stem, suffix, parent = p.stem, p.suffix, p.parent
+    n = 1
+    while True:
+        candidate = parent / f"{stem} ({n}){suffix}"
+        if not candidate.exists():
+            return str(candidate)
+        n += 1
+
+
 def do_generate(
     plan,
     *, log_fn=_noop, status_fn=_noop, prog_fn=_noop, cancel_event=None,
@@ -705,6 +718,7 @@ def do_generate(
         cancel_event = threading.Event()
 
     output = plan["output_path"]
+    output = _unique_path(output)
     fade_dur = plan.get("crossfade_dur", 0.0)
     music_vol = plan.get("music_vol", 0.3)
     seed = plan.get("seed")
