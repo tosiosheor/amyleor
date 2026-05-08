@@ -278,17 +278,12 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
   </div>
 
   <details open>
-    <summary>Source &amp; Destination</summary>
+    <summary>Inputs</summary>
     <div class="section-body">
       <div class="form-row">
         <label class="fixed">Input folder</label>
         <input type="text" id="input" class="path" placeholder="/path/to/videos">
         <button class="btn sm" onclick="browse('input','folder')">Browse…</button>
-      </div>
-      <div class="form-row">
-        <label class="fixed">Output file</label>
-        <input type="text" id="output" class="path" placeholder="/path/to/output.mp4">
-        <button class="btn sm" onclick="browse('output','savefile')">Browse…</button>
       </div>
       <div class="form-row">
         <label class="fixed" style="color:var(--subtle)">Music folder <span style="font-size:11px">(optional)</span></label>
@@ -341,6 +336,10 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
           <option value="by_count">By count (∝ number of videos)</option>
           <option value="by_duration">By duration (∝ total video length)</option>
         </select>
+      </div>
+      <div class="form-row">
+        <input type="checkbox" id="tile_portrait" checked>
+        <label for="tile_portrait">Tile portrait videos (3× across screen when no active region found)</label>
       </div>
     </div>
   </details>
@@ -417,14 +416,6 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
   <div class="action-bar">
     <div class="btn-group">
       <button class="btn muted" id="btn-plan" onclick="startPlan()">Plan Video</button>
-      <button class="btn primary" id="btn-generate" onclick="startGenerate()" disabled>Generate Video</button>
-      <button class="btn" id="btn-cancel" onclick="cancelJob()" disabled>Cancel</button>
-    </div>
-    <div class="progress-area">
-      <div class="progress-wrap">
-        <progress id="progress" value="0" max="100"></progress>
-        <span class="status-text" id="status-text">Ready</span>
-      </div>
     </div>
   </div>
 
@@ -494,6 +485,30 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
     <textarea id="json-ta" placeholder="Plan JSON will appear here…" spellcheck="false"
               oninput="scheduleJsonSync()"></textarea>
   </div>
+  
+  <details open>
+    <summary>Output</summary>
+    <div class="section-body">
+      <div class="form-row">
+        <label class="fixed">Output file</label>
+        <input type="text" id="output" class="path" placeholder="/path/to/output.mp4">
+        <button class="btn sm" onclick="browse('output','savefile')">Browse…</button>
+      </div>
+    </div>
+  </details>
+
+  <div class="action-bar">
+    <div class="btn-group">
+      <button class="btn primary" id="btn-generate" onclick="startGenerate()" disabled>Generate Video</button>
+      <button class="btn" id="btn-cancel" onclick="cancelJob()" disabled>Cancel</button>
+    </div>
+    <div class="progress-area">
+      <div class="progress-wrap">
+        <progress id="progress" value="0" max="100"></progress>
+        <span class="status-text" id="status-text">Ready</span>
+      </div>
+    </div>
+  </div>
 
   <div class="log-section">
     <div class="log-hdr">
@@ -520,7 +535,7 @@ let dragSrcIdx = null;
 const FIELDS = [
   'input','output','music','duration',
   'use_max','max_clip','use_fade','fade_dur','use_seed','seed',
-  'clip_order','subfolder_split','use_all',
+  'clip_order','subfolder_split','use_all','tile_portrait',
   'music_vol','beat_sync','beats_per_clip',
   'use_countdown','cd_corner','cd_dur','cd_ivmin','cd_ivmax',
   'cd_text1','cd_text1_dur','cd_text2','cd_text2_dur','cd_sync',

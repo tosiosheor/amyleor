@@ -5,7 +5,7 @@ import time
 
 
 def _run(cmd, check=True):
-    return subprocess.run(cmd, capture_output=True, text=True, check=check)
+    return subprocess.run(cmd, capture_output=True, encoding="utf-8", errors="replace", check=check)
 
 
 def _run_ffmpeg(cmd, log_fn=None, cancel_event=None):

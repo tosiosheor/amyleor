@@ -108,10 +108,7 @@ def build_section_clips(
                 if use_all:
                     break
                 pool_idx = 0
-                if clip_order == "intensity":
-                    pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
-                else:
-                    rng.shuffle(pool)
+                rng.shuffle(pool)
             vf, info = pool[pool_idx]
             pool_idx += 1
 
@@ -159,10 +156,7 @@ def build_section_clips(
                     break
                 pool_idx = 0
                 cycle += 1
-                if clip_order == "intensity":
-                    pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
-                else:
-                    rng.shuffle(pool)
+                rng.shuffle(pool)
                 if cycle > 50:
                     break
             vf, info = pool[pool_idx]
@@ -195,7 +189,7 @@ def do_analyse(
     folder, output, target_dur, max_clip, seed,
     music_folder, music_vol, fade_dur, beat_sync, beats_per_clip,
     countdown_cfg=None, clip_order="random",
-    subfolder_split="equal", use_all=False,
+    subfolder_split="equal", use_all=False, tile_portrait=True,
     *, log_fn=_noop, status_fn=_noop, prog_fn=_noop, cancel_event=None,
 ):
     """Analyse sources and return a plan dict, or None if cancelled."""
@@ -204,7 +198,7 @@ def do_analyse(
     log_fn("Scanning folder for videos…", color="accent")
     all_files = [
         f for f in Path(folder).iterdir()
-        if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS
+        if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS and not f.name.startswith("._")
     ]
     if all_files:
         log_fn(f"  Found {len(all_files)} root-level file(s)")
@@ -337,7 +331,7 @@ def do_analyse(
         for sf in _subfolders:
             sf_files = sorted([
                 f for f in sf.iterdir()
-                if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS
+                if f.is_file() and f.suffix.lower() in VIDEO_EXTENSIONS and not f.name.startswith("._")
             ])
             sf_cache_data = _load_cache(sf)
             sf_vcache = sf_cache_data.setdefault("video_info", {})
@@ -420,10 +414,7 @@ def do_analyse(
             subfolder_pools, section_durs, build_durs
         ):
             sf_pool_copy = list(sf_pool)
-            if clip_order == "intensity":
-                sf_pool_copy.sort(key=lambda x: x[1].get("energy") or float("-inf"))
-            else:
-                rng.shuffle(sf_pool_copy)
+            rng.shuffle(sf_pool_copy)
             dur_label = "all videos" if use_all else f"target {sec_dur:.0f}s"
             log_fn(f"\n  Section '{sf.name}' — {dur_label}", color="accent")
             sf_hcache = sf_cache_data.setdefault("highlights", {})
@@ -439,6 +430,8 @@ def do_analyse(
                 log_fn("Cancelled.", color="subtle")
                 status_fn("Cancelled")
                 return None
+            if clip_order == "intensity" and sec_clips:
+                sec_clips.sort(key=lambda c: c[1].get("energy") or float("-inf"))
             sec_total = sum(d for _, _, _, d in sec_clips)
             clips.extend(sec_clips)
             total += sec_total
@@ -447,10 +440,7 @@ def do_analyse(
         log_fn(f"\nTotal: {len(clips)} clip(s) → ~{total:.1f}s")
 
     else:
-        if clip_order == "intensity":
-            pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
-        else:
-            rng.shuffle(pool)
+        rng.shuffle(pool)
         clips = []
         total = 0.0
         pool_idx = 0
@@ -472,10 +462,7 @@ def do_analyse(
                         return None
                     if pool_idx >= len(pool):
                         pool_idx = 0
-                        if clip_order == "intensity":
-                            pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
-                        else:
-                            rng.shuffle(pool)
+                        rng.shuffle(pool)
                     vf, info = pool[pool_idx]
                     pool_idx += 1
                     raw_dur = info["duration"]
@@ -523,10 +510,7 @@ def do_analyse(
                     if use_all:
                         break
                     pool_idx = 0
-                    if clip_order == "intensity":
-                        pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
-                    else:
-                        rng.shuffle(pool)
+                    rng.shuffle(pool)
                 vf, info = pool[pool_idx]
                 pool_idx += 1
 
@@ -579,10 +563,7 @@ def do_analyse(
                         break
                     pool_idx = 0
                     cycle += 1
-                    if clip_order == "intensity":
-                        pool.sort(key=lambda x: x[1].get("energy") or float("-inf"))
-                    else:
-                        rng.shuffle(pool)
+                    rng.shuffle(pool)
                     if cycle > 50:
                         break
                 vf, info = pool[pool_idx]
@@ -611,6 +592,9 @@ def do_analyse(
                 _save_cache(folder, vcache_data)
 
             log_fn(f"  Planned {len(clips)} clip(s) → ~{total:.1f}s total")
+
+        if clip_order == "intensity" and clips:
+            clips.sort(key=lambda c: c[1].get("energy") or float("-inf"))
 
     # Portrait motion analysis
     portrait_clips = [
@@ -673,6 +657,7 @@ def do_analyse(
         "crossfade_dur": fade_dur,
         "music_vol": music_vol,
         "seed": seed,
+        "tile_portrait": tile_portrait,
         "clips": [
             {
                 "path": str(vf),
@@ -723,6 +708,7 @@ def do_generate(
     fade_dur = plan.get("crossfade_dur", 0.0)
     music_vol = plan.get("music_vol", 0.3)
     seed = plan.get("seed")
+    tile_portrait = plan.get("tile_portrait", True)
     clips_data = plan.get("clips", [])
     music_data = plan.get("music", [])
     countdown_cfg = plan.get("countdown")
@@ -833,7 +819,8 @@ def do_generate(
                 cached_encoded.touch()
                 log_fn("    (encoded clip cached)", color="subtle")
             else:
-                ok = process_clip(vf, out_clip, start, dur, info, cancel_event, motion=motion)
+                ok = process_clip(vf, out_clip, start, dur, info, cancel_event, motion=motion,
+                                  tile_portrait=tile_portrait)
                 if not ok:
                     _flush_motion_caches()
                     log_fn("Cancelled.", color="subtle")
@@ -865,7 +852,7 @@ def do_generate(
         use_xfade = fade_dur > 0 or music_path is not None
 
         if use_xfade:
-            log_fn("\nApplying cross-fades and mixing…", color="accent")
+            log_fn("\nPass 1: Cross-fading clips and mixing music into video…", color="accent")
             status_fn("Mixing…")
             try:
                 xfade_concat(
@@ -880,12 +867,12 @@ def do_generate(
                     return
                 raise
         else:
-            log_fn("\nConcatenating…", color="accent")
+            log_fn("\nPass 1: Concatenating clips…", color="accent")
             status_fn("Concatenating…")
             concat_clips(encoded, Path(output))
 
     if countdown_cfg:
-        log_fn("\nBuilding countdown overlay…", color="accent")
+        log_fn("\nPass 2: Burning countdown overlay (full re-encode of video)…", color="accent")
         status_fn("Countdown overlay…")
         prog_fn(90)
 

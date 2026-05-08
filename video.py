@@ -1,4 +1,5 @@
 import subprocess
+import threading
 from pathlib import Path
 
 from audio import mix_music
@@ -8,20 +9,39 @@ from ffmpeg_utils import _run, _run_ffmpeg, get_video_info
 _XFADE_CHUNK = 60  # max clips per ffmpeg invocation
 
 
-def _filter(width, height, has_audio, audio_input_index, motion=None):
+def _filter(width, height, has_audio, audio_input_index, motion=None, tile_portrait=True):
     """Return (use_complex, filter_str, extra_map_args) for a single clip encode."""
     portrait = height > width
     if portrait:
         y_frac, x_frac, confidence = motion if motion is not None else (0.5, 0.5, 0.0)
+
+        if confidence < 0.35 and tile_portrait:
+            # Tile the portrait video 3 times across the screen.
+            tile_w = OUT_W // 3
+            if tile_w % 2:
+                tile_w -= 1
+            tile_scale = (
+                f"scale={tile_w}:{OUT_H}:force_original_aspect_ratio=increase,"
+                f"crop={tile_w}:{OUT_H}"
+            )
+            fc = (
+                f"[0:v]split=3[f1][f2][f3];"
+                f"[f1]{tile_scale}[t1];"
+                f"[f2]{tile_scale}[t2];"
+                f"[f3]{tile_scale}[t3];"
+                f"[t1][t2][t3]hstack=inputs=3,setsar=1,fps={OUT_FPS}[vout]"
+            )
+            maps = ["-map", "[vout]", "-map", f"{audio_input_index}:a"]
+            return True, fc, maps
 
         bg_scale_h = OUT_W * height // width
         if bg_scale_h % 2:
             bg_scale_h += 1
         bg_y = max(0, min(round((bg_scale_h - OUT_H) * y_frac), bg_scale_h - OUT_H))
 
-        if confidence >= 0.5:
+        if confidence >= 0.35:
             blur = ""
-        elif confidence >= 0.2:
+        elif confidence >= 0.1:
             blur = ",boxblur=luma_radius=14:luma_power=2"
         else:
             blur = ",boxblur=luma_radius=28:luma_power=3"
@@ -61,13 +81,15 @@ def _filter(width, height, has_audio, audio_input_index, motion=None):
         return False, vf, maps
 
 
-def process_clip(src, dst, start, duration, info, cancel_event=None, motion=None):
+def process_clip(src, dst, start, duration, info, cancel_event=None, motion=None,
+                 tile_portrait=True):
     """Transcode one clip to the standard output format."""
     has_audio = info["has_audio"]
     audio_idx = 0 if has_audio else 1
 
     use_complex, filter_str, maps = _filter(
-        info["width"], info["height"], has_audio, audio_idx, motion=motion
+        info["width"], info["height"], has_audio, audio_idx, motion=motion,
+        tile_portrait=tile_portrait,
     )
 
     cmd = ["ffmpeg", "-y"]
@@ -91,17 +113,31 @@ def process_clip(src, dst, start, duration, info, cancel_event=None, motion=None
     cmd.append(str(dst))
 
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    stderr_chunks: list[bytes] = []
+
+    def _drain():
+        assert proc.stderr is not None
+        for chunk in iter(lambda: proc.stderr.read(4096), b""):
+            stderr_chunks.append(chunk)
+
+    drain_thread = threading.Thread(target=_drain, daemon=True)
+    drain_thread.start()
+
     while proc.poll() is None:
         if cancel_event and cancel_event.is_set():
             proc.kill()
+            drain_thread.join(timeout=2)
             return False
         try:
             proc.wait(timeout=0.5)
         except subprocess.TimeoutExpired:
             pass
 
+    drain_thread.join(timeout=5)
+
     if proc.returncode != 0:
-        raise RuntimeError(proc.communicate()[1].decode(errors="replace")[-800:])
+        raise RuntimeError(b"".join(stderr_chunks).decode(errors="replace")[-800:])
     return True
 
 
@@ -189,12 +225,19 @@ def xfade_concat(clip_paths, output_path, fade_dur, music_path=None, music_vol=0
     if n > _XFADE_CHUNK:
         chunks = [clip_paths[i:i + _XFADE_CHUNK]
                   for i in range(0, n, _XFADE_CHUNK)]
+        n_chunks = len(chunks)
+        if log_fn:
+            log_fn(f"  {n} clips — splitting into {n_chunks} batches of up to {_XFADE_CHUNK}…")
         chunk_outputs = []
         for idx, chunk in enumerate(chunks):
+            if log_fn:
+                log_fn(f"  Batch {idx+1}/{n_chunks} ({len(chunk)} clips)…")
             chunk_out = tmp_dir / f"_chunk_{idx:04d}.mp4"
             _xfade_chunk(chunk, chunk_out, fade_dur, log_fn=log_fn, cancel_event=cancel_event)
             chunk_outputs.append(chunk_out)
 
+        if log_fn:
+            log_fn(f"  Merging {n_chunks} batches…")
         no_music_out = tmp_dir / "_merged_no_music.mp4"
         xfade_concat(chunk_outputs, no_music_out, fade_dur, music_path=None,
                      log_fn=log_fn, cancel_event=cancel_event)

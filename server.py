@@ -43,6 +43,7 @@ _DEFAULT_SETTINGS = {
     "clip_order": "random",
     "subfolder_split": "equal",
     "use_all": False,
+    "tile_portrait": True,
     "use_countdown": False,
     "cd_corner": "top-right",
     "cd_dur": "5",
@@ -231,6 +232,7 @@ def _parse_settings(s: dict) -> dict:
     clip_order = s.get("clip_order", "random")
     subfolder_split = s.get("subfolder_split", "equal")
     use_all = bool(s.get("use_all", False))
+    tile_portrait = bool(s.get("tile_portrait", True))
 
     countdown_cfg = None
     if s.get("use_countdown"):
@@ -263,6 +265,7 @@ def _parse_settings(s: dict) -> dict:
         clip_order=clip_order,
         subfolder_split=subfolder_split,
         use_all=use_all,
+        tile_portrait=tile_portrait,
     )
 
 
