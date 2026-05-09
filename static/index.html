@@ -185,6 +185,14 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 .clip-block.landscape { background-color: var(--landscape); }
 .clip-block.dragging  { opacity: 0.3; }
 .clip-block.drag-target { border-color: var(--accent) !important; }
+.clip-block.muted::before {
+  content: 'MUTED';
+  position: absolute; top: 0; left: 0; right: 0;
+  background: rgba(255,69,58,0.7);
+  color: #fff; font-size: 9px; font-weight: 700;
+  text-align: center; padding: 1px 0; letter-spacing: 0.07em;
+  z-index: 3; pointer-events: none;
+}
 .clip-info { position: absolute; bottom: 4px; left: 5px; right: 5px; z-index: 2; }
 .clip-name { font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .clip-dur  { font-size: 9px; color: rgba(255,255,255,0.55); }
@@ -361,6 +369,27 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
         <input type="number" id="beats_per_clip" class="short" value="8" min="1">
         <span class="unit">beats</span>
       </div>
+      <div class="form-row">
+        <input type="checkbox" id="auto_mute">
+        <label for="auto_mute">Auto-mute clips with music or noise (keeps human voice; requires librosa)</label>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Outro</summary>
+    <div class="section-body">
+      <div class="form-row">
+        <input type="checkbox" id="use_outro" onchange="toggleOutro(this.checked)">
+        <label for="use_outro">Enable outro (slow fade to black + silence, music-aligned)</label>
+      </div>
+      <div id="outro-fields" style="opacity:0.38;pointer-events:none">
+        <div class="form-row" style="margin-top:6px">
+          <label class="fixed">Fade duration</label>
+          <input type="number" id="outro_dur" class="short" value="3" min="0.5" step="0.5">
+          <span class="unit">seconds</span>
+        </div>
+      </div>
     </div>
   </details>
 
@@ -474,6 +503,10 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
       <div class="ce-field">
         <span class="badge" id="ce-badge"></span>
       </div>
+      <div class="ce-field">
+        <input type="checkbox" id="ce-muted" onchange="updateClip('muted',this.checked)">
+        <label for="ce-muted" style="cursor:pointer;color:var(--text)">Mute clip audio</label>
+      </div>
       <button class="btn sm danger" onclick="removeClip()">Remove</button>
     </div>
   </div>
@@ -536,7 +569,8 @@ const FIELDS = [
   'input','output','music','duration',
   'use_max','max_clip','use_fade','fade_dur','use_seed','seed',
   'clip_order','subfolder_split','use_all','tile_portrait',
-  'music_vol','beat_sync','beats_per_clip',
+  'music_vol','beat_sync','beats_per_clip','auto_mute',
+  'use_outro','outro_dur',
   'use_countdown','cd_corner','cd_dur','cd_ivmin','cd_ivmax',
   'cd_text1','cd_text1_dur','cd_text2','cd_text2_dur','cd_sync',
 ];
@@ -554,6 +588,7 @@ async function loadSettings() {
     toggleEl('fade_dur', document.getElementById('use_fade').checked);
     toggleEl('seed',     document.getElementById('use_seed').checked);
     toggleUseAll(        document.getElementById('use_all').checked);
+    toggleOutro(         document.getElementById('use_outro').checked);
     toggleCountdown(     document.getElementById('use_countdown').checked);
   } catch(e) { console.warn('settings load failed', e); }
 }
@@ -583,6 +618,11 @@ document.addEventListener('change', e => { if (e.target.matches('input, select')
 
 function toggleEl(id, on) { const el = document.getElementById(id); if (el) el.disabled = !on; }
 function toggleUseAll(on) { toggleEl('duration', !on); }
+function toggleOutro(on) {
+  const f = document.getElementById('outro-fields');
+  f.style.opacity = on ? '1' : '0.38';
+  f.style.pointerEvents = on ? 'auto' : 'none';
+}
 function toggleCountdown(on) {
   const f = document.getElementById('cd-fields');
   f.style.opacity = on ? '1' : '0.38';
@@ -759,7 +799,7 @@ function renderVideoTrack(dur, W) {
     const name = clip.path.split('/').pop();
 
     const block = document.createElement('div');
-    block.className = `clip-block ${portrait ? 'portrait' : 'landscape'}${idx === selIdx ? ' selected' : ''}`;
+    block.className = `clip-block ${portrait ? 'portrait' : 'landscape'}${idx === selIdx ? ' selected' : ''}${clip.muted ? ' muted' : ''}`;
     block.style.cssText = `left:${x}px;width:${w}px`;
     block.dataset.idx = idx;
     block.title = clip.path + '\n⌦ Double-click to open';
@@ -891,6 +931,7 @@ function renderEditor() {
   const badge = document.getElementById('ce-badge');
   badge.textContent = portrait ? 'portrait' : 'landscape';
   badge.className = `badge ${portrait ? 'portrait' : 'landscape'}`;
+  document.getElementById('ce-muted').checked = !!c.muted;
   ed.classList.add('open');
 }
 

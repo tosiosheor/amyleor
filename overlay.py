@@ -15,10 +15,13 @@ def _find_font(font_size):
                 return ImageFont.truetype(f, font_size)
             except Exception:
                 pass
-    return ImageFont.load_default()
+    try:
+        return ImageFont.load_default(size=font_size)  # Pillow 10+
+    except TypeError:
+        return ImageFont.load_default()
 
 
-def _render_overlay_png(text, font_size, path):
+def _render_overlay_png(text, font_size, path, min_height=0):
     """Render text to a transparent PNG. Returns (width, height)."""
     from PIL import Image, ImageDraw
 
@@ -26,8 +29,15 @@ def _render_overlay_png(text, font_size, path):
     font = _find_font(font_size)
 
     dummy = Image.new("RGBA", (1, 1))
-    bbox = ImageDraw.Draw(dummy).textbbox((0, 0), text, font=font, stroke_width=border_w)
-    w, h = max(1, bbox[2] - bbox[0]), max(1, bbox[3] - bbox[1])
+    draw  = ImageDraw.Draw(dummy)
+    bbox  = draw.textbbox((0, 0), text, font=font, stroke_width=border_w)
+    w, h  = max(1, bbox[2] - bbox[0]), max(1, bbox[3] - bbox[1])
+
+    if min_height > 0 and h < min_height:
+        font_size = int(font_size * min_height / h * 1.05)
+        font = _find_font(font_size)
+        bbox = draw.textbbox((0, 0), text, font=font, stroke_width=border_w)
+        w, h = max(1, bbox[2] - bbox[0]), max(1, bbox[3] - bbox[1])
 
     img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     ImageDraw.Draw(img).text(
@@ -135,11 +145,12 @@ def apply_countdown_overlay(input_path, output_path, events, corner, cancel_even
         text_to_entry = {}  # text -> (ffmpeg_input_idx, png_w, png_h)
         png_paths = []
 
+        min_h = int(vid_h * 0.07)
         for _, _, text in events:
             if text not in text_to_entry:
                 idx = len(png_paths)
                 p = os.path.join(tmpdir, f"ovl_{idx:04d}.png")
-                pw, ph = _render_overlay_png(text, 90, p)
+                pw, ph = _render_overlay_png(text, max(90, min_h), p, min_height=min_h)
                 png_paths.append(p)
                 text_to_entry[text] = (idx + 1, pw, ph)  # +1: input 0 is video
 

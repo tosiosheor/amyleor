@@ -20,6 +20,7 @@ from analysis import (
     _compute_section_boundaries,
     analyze_portrait_motion,
     detect_change_points,
+    detect_is_music_only,
     find_highlight_start,
 )
 from audio import (
@@ -39,11 +40,41 @@ from cache import (
 from constants import CLIP_CACHE_DIR_NAME, MUSIC_EXTENSIONS, VIDEO_EXTENSIONS
 from ffmpeg_utils import get_video_info
 from overlay import apply_countdown_overlay, build_countdown_events
-from video import concat_clips, process_clip, xfade_concat
+from video import apply_outro, concat_clips, process_clip, xfade_concat
 
 
 def _noop(*a, **kw):
     pass
+
+
+def _find_outro_start(total_dur, outro_dur, music_tracks, change_points):
+    """Return a music-aligned fade-start time near total_dur, or None."""
+    window = max(outro_dur * 2.5, 15.0)
+    lo = max(0.0, total_dur - window)
+    hi = total_dur + window
+
+    candidates = []
+
+    # Natural track-boundary end-points: cumulative sums, repeated across the video
+    if music_tracks:
+        period = sum(tr[1] for tr in music_tracks)
+        if period > 0:
+            t = 0.0
+            while t < hi + period:
+                t += period
+                if lo <= t <= hi:
+                    candidates.append(t)
+
+    # Musical change-points (build/drop detections)
+    if change_points:
+        candidates.extend(cp for cp in change_points if lo <= cp <= hi)
+
+    if not candidates:
+        return None
+
+    # Prefer a point just before total_dur so the fade overlaps the final clip
+    target = total_dur - outro_dur * 0.25
+    return min(candidates, key=lambda c: abs(c - target))
 
 
 def _is_cancelled(cancel_event):
@@ -190,6 +221,7 @@ def do_analyse(
     music_folder, music_vol, fade_dur, beat_sync, beats_per_clip,
     countdown_cfg=None, clip_order="random",
     subfolder_split="equal", use_all=False, tile_portrait=True,
+    auto_mute=False, outro_dur=0.0,
     *, log_fn=_noop, status_fn=_noop, prog_fn=_noop, cancel_event=None,
 ):
     """Analyse sources and return a plan dict, or None if cancelled."""
@@ -299,7 +331,7 @@ def do_analyse(
             if beats is None:
                 log_fn("  Falling back to regular clip timing.", color="subtle")
 
-        need_change_points = _subfolder_mode or (countdown_cfg and countdown_cfg["sync"])
+        need_change_points = _subfolder_mode or (countdown_cfg and countdown_cfg["sync"]) or outro_dur > 0
         if need_change_points and music_files:
             cpcache = mcache_data.setdefault("change_points", {})
             first = music_files[0]
@@ -596,6 +628,40 @@ def do_analyse(
         if clip_order == "intensity" and clips:
             clips.sort(key=lambda c: c[1].get("energy") or float("-inf"))
 
+    # Outro: snap fade-start to a music cue and extend clips if needed
+    outro_start = None
+    if outro_dur > 0:
+        outro_start = _find_outro_start(total, outro_dur, music_tracks, change_points)
+        if outro_start is not None:
+            log_fn(
+                f"\nOutro: music-aligned fade at {outro_start:.1f}s "
+                f"(video total {total:.1f}s, fade {outro_dur:.1f}s)",
+                color="accent",
+            )
+            outro_end = outro_start + outro_dur
+            if outro_end > total:
+                extra_needed = outro_end - total
+                log_fn(f"  Extending {extra_needed:.1f}s to reach outro…", color="subtle")
+                ext_pool = list(pool) if pool else (
+                    list(subfolder_pools[-1][1]) if _subfolder_mode and subfolder_pools else []
+                )
+                if ext_pool:
+                    rng.shuffle(ext_pool)
+                    extra_clips, _ = build_section_clips(
+                        ext_pool, extra_needed, rng, max_clip, beats, beats_per_clip, 0,
+                        log_fn=log_fn, cancel_event=cancel_event, use_all=False,
+                    )
+                    if extra_clips:
+                        clips.extend(extra_clips)
+                        total += sum(d for _, _, _, d in extra_clips)
+                        log_fn(f"  → {len(extra_clips)} clip(s) added, total {total:.1f}s")
+        else:
+            log_fn(
+                "\nOutro: no music cue found near end — fade from last clip.",
+                color="subtle",
+            )
+            outro_start = max(0.0, total - outro_dur)
+
     # Portrait motion analysis
     portrait_clips = [
         (i, vf, info, start, dur)
@@ -638,6 +704,44 @@ def do_analyse(
             if dirty:
                 _save_cache(folder_str, cache_data)
 
+    # Auto-mute: detect music-only clips and mark them muted
+    music_only_by_idx = {}
+    if auto_mute:
+        log_fn("\nDetecting music-only clips…", color="accent")
+        folder_clips_music: dict = {}
+        for idx, (vf, info, start, dur) in enumerate(clips):
+            if info.get("has_audio", True):
+                folder_clips_music.setdefault(str(vf.parent), []).append(
+                    (idx, vf, info, start, dur)
+                )
+        for folder_str, fclips in folder_clips_music.items():
+            cache_data = _load_cache(folder_str)
+            mcache = cache_data.setdefault("music_detect", {})
+            dirty = False
+            for idx, vf, info, start, dur in fclips:
+                if _is_cancelled(cancel_event):
+                    return None
+                cache_key = f"{vf.name}:{start:.3f}:{dur:.3f}"
+                if cache_key in mcache and _fp_match(vf, mcache[cache_key]):
+                    is_music = mcache[cache_key]["is_music_only"]
+                    log_fn(
+                        f"  {vf.name}: {'music only' if is_music else 'has voice'} (cached)",
+                        color="subtle",
+                    )
+                else:
+                    log_fn(f"  Analysing {vf.name}…", color="subtle")
+                    is_music = detect_is_music_only(vf, start, dur)
+                    mtime, size = _fingerprint(vf)
+                    mcache[cache_key] = {"mtime": mtime, "size": size, "is_music_only": is_music}
+                    dirty = True
+                    log_fn(
+                        f"    → {'music only — will mute' if is_music else 'voice detected — keeping audio'}",
+                        color="subtle",
+                    )
+                music_only_by_idx[idx] = is_music
+            if dirty:
+                _save_cache(folder_str, cache_data)
+
     # Sort music chill → intense
     if music_tracks:
         selected, acc = [], 0.0
@@ -667,6 +771,7 @@ def do_analyse(
                 "height": info["height"],
                 "has_audio": info["has_audio"],
                 "motion": list(motion_by_idx[i]) if i in motion_by_idx else None,
+                "muted": music_only_by_idx.get(i, False),
             }
             for i, (vf, info, start, dur) in enumerate(clips)
         ],
@@ -675,6 +780,8 @@ def do_analyse(
             for mf, dur, *_ in music_tracks
         ],
         "countdown": None,
+        "outro_dur": outro_dur,
+        "outro_start": outro_start,
     }
 
     if countdown_cfg:
@@ -712,6 +819,8 @@ def do_generate(
     clips_data = plan.get("clips", [])
     music_data = plan.get("music", [])
     countdown_cfg = plan.get("countdown")
+    outro_dur = plan.get("outro_dur", 0.0)
+    outro_start = plan.get("outro_start")
 
     music_tracks = [(Path(m["path"]), m["duration"]) for m in music_data]
     total = sum(c["duration"] for c in clips_data)
@@ -854,11 +963,13 @@ def do_generate(
         if use_xfade:
             log_fn("\nPass 1: Cross-fading clips and mixing music into video…", color="accent")
             status_fn("Mixing…")
+            muted_flags = [bool(c.get("muted", False)) for c in clips_data]
             try:
                 xfade_concat(
                     encoded, Path(output), fade_dur, music_path, music_vol,
                     log_fn=lambda m: log_fn(m, color="subtle"),
                     cancel_event=cancel_event,
+                    muted_flags=muted_flags,
                 )
             except RuntimeError as exc:
                 if str(exc) == "Cancelled":
@@ -941,6 +1052,27 @@ def do_generate(
             overlay_tmp.replace(Path(output))
         else:
             log_fn("  No countdown events fit within video duration — skipping.", color="subtle")
+
+    if outro_dur and outro_dur > 0:
+        log_fn("\nPass: Applying outro (fade to black + silence)…", color="accent")
+        status_fn("Outro…")
+        prog_fn(95)
+        outro_tmp = Path(output).with_suffix(".outro_tmp.mp4")
+        try:
+            apply_outro(
+                Path(output), outro_tmp, outro_dur,
+                fade_start=outro_start,
+                cancel_event=cancel_event,
+                log_fn=lambda m: log_fn(m, color="subtle"),
+            )
+        except RuntimeError as exc:
+            if str(exc) == "Cancelled":
+                log_fn("Cancelled.", color="subtle")
+                status_fn("Cancelled")
+                outro_tmp.unlink(missing_ok=True)
+                return
+            raise
+        outro_tmp.replace(Path(output))
 
     prog_fn(100)
     log_fn(f"\n✅  Done!  →  {output}", color="success")

@@ -44,6 +44,8 @@ _DEFAULT_SETTINGS = {
     "subfolder_split": "equal",
     "use_all": False,
     "tile_portrait": True,
+    "use_outro": False,
+    "outro_dur": "3",
     "use_countdown": False,
     "cd_corner": "top-right",
     "cd_dur": "5",
@@ -250,6 +252,9 @@ def _parse_settings(s: dict) -> dict:
             "sync": bool(s.get("cd_sync", True)),
         }
 
+    auto_mute = bool(s.get("auto_mute", False))
+    outro_dur = float(s["outro_dur"]) if s.get("use_outro") else 0.0
+
     return dict(
         folder=s.get("input", ""),
         output=s.get("output", ""),
@@ -266,6 +271,8 @@ def _parse_settings(s: dict) -> dict:
         subfolder_split=subfolder_split,
         use_all=use_all,
         tile_portrait=tile_portrait,
+        auto_mute=auto_mute,
+        outro_dur=outro_dur,
     )
 
 

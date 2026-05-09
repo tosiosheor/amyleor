@@ -8,8 +8,7 @@ python3 amyleor.py --app     # opens in a native window (requires pywebview)
 ```
 
 **Requires:** `ffmpeg` + `ffprobe` — `brew install ffmpeg`  
-**Requires:** `fastapi`, `uvicorn` — `pip install fastapi "uvicorn[standard]"`  
-**Optional:** `librosa` — `pip install librosa` (beat detection and music change-point analysis)  
+**Requires:** `fastapi`, `uvicorn` — `pip install fastapi "uvicorn[standard] pillow librosa"`  
 **Optional:** `pywebview` — `pip install pywebview` (native window instead of browser tab)
 
 ---

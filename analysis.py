@@ -162,6 +162,66 @@ def detect_change_points(path, log_fn=None):
         return None
 
 
+def detect_is_music_only(clip_path, start, duration):
+    """
+    Returns True if the clip should be muted: music-only or noise (shower, wind, etc.).
+    Returns False to keep audio (i.e. human vocals detected: speech, moaning, etc.).
+    Conservative: returns False (don't mute) on any failure.
+
+    Detection logic using spectral flatness and zero-crossing rate at 16 kHz:
+      - Music:       flatness < 0.008  (highly tonal — too structured to be voice)
+      - Human voice: flatness 0.008–0.45, ZCR 0.003–0.25  (voiced + unvoiced sounds)
+      - Noise:       flatness > 0.45 OR ZCR > 0.25  (broadband, e.g. shower/wind)
+    Anything that isn't human voice is considered non-vocal and should be muted.
+    """
+    try:
+        import librosa
+        import numpy as np
+
+        sample_dur = min(float(duration), 30.0)
+        sr = 16000
+        cmd = [
+            "ffmpeg", "-ss", f"{float(start):.3f}", "-i", str(clip_path),
+            "-t", f"{sample_dur:.3f}",
+            "-vn", "-ar", str(sr), "-ac", "1", "-f", "s16le", "-",
+        ]
+        result = subprocess.run(cmd, capture_output=True, timeout=60)
+        raw = result.stdout
+        if not raw:
+            return False
+        y = np.frombuffer(raw, dtype=np.int16).astype(np.float32) / 32768.0
+
+        if len(y) < int(sr * 0.3):
+            return False  # too short — don't mute
+
+        hop = 256
+        rms = librosa.feature.rms(y=y, hop_length=hop)[0]
+        rms_max = float(rms.max())
+        if rms_max < 1e-6:
+            return False  # silent — nothing to mute
+
+        active = rms / rms_max > 0.05
+        flatness = librosa.feature.spectral_flatness(y=y, hop_length=hop)[0]
+        zcr = librosa.feature.zero_crossing_rate(y, hop_length=hop)[0]
+
+        # Human voice window: not too tonal (music), not too noisy (shower/wind)
+        # Lower flatness bound excludes music; upper flatness + ZCR bounds exclude noise
+        voice_like = (
+            active
+            & (flatness > 0.008) & (flatness < 0.45)
+            & (zcr > 0.003) & (zcr < 0.25)
+        )
+        active_count = int(active.sum())
+        if active_count == 0:
+            return False
+        has_voice = float(voice_like.sum()) / active_count > 0.12
+        return not has_voice
+    except ImportError:
+        return False  # librosa not installed — don't mute
+    except Exception:
+        return False  # on any error — don't mute
+
+
 def _compute_section_boundaries(n_sections, total_dur, change_points, buffer=60.0, weights=None):
     """
     Return (section_durs, snapped_boundaries).

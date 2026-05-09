@@ -12,11 +12,17 @@ OUT_W, OUT_H = 1920, 1080
 OUT_FPS = 30
 
 FONT_CANDIDATES = [
+    # macOS
     "/Library/Fonts/Arial.ttf",
     "/System/Library/Fonts/Supplemental/Arial.ttf",
     "/System/Library/Fonts/Helvetica.ttc",
+    # Linux
     "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
     "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf",
+    # Windows
+    "C:/Windows/Fonts/arial.ttf",
+    "C:/Windows/Fonts/Arial.ttf",
+    "C:/Windows/Fonts/arialbd.ttf",
 ]
 
 # GUI colour palette

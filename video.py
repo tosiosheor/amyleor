@@ -159,7 +159,8 @@ def concat_clips(clip_paths, output_path):
         list_file.unlink(missing_ok=True)
 
 
-def _xfade_chunk(clip_paths, output_path, fade_dur, log_fn=None, cancel_event=None):
+def _xfade_chunk(clip_paths, output_path, fade_dur, log_fn=None, cancel_event=None,
+                 muted_flags=None):
     """Concatenate a single batch of clips (<=_XFADE_CHUNK) with xfade/acrossfade."""
     n = len(clip_paths)
     assert 1 <= n <= _XFADE_CHUNK
@@ -178,8 +179,15 @@ def _xfade_chunk(clip_paths, output_path, fade_dur, log_fn=None, cancel_event=No
         cmd += ["-i", str(p)]
 
     if n == 1:
-        cmd += ["-map", "0:v", "-map", "0:a", "-c", "copy", str(output_path)]
-        _run(cmd)
+        if muted_flags and muted_flags[0]:
+            fc = "[0:a]volume=0[aout]"
+            cmd += ["-filter_complex", fc, "-map", "0:v", "-map", "[aout]"]
+            cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"]
+            cmd.append(str(output_path))
+            _run(cmd)
+        else:
+            cmd += ["-map", "0:v", "-map", "0:a", "-c", "copy", str(output_path)]
+            _run(cmd)
         return
 
     fc_parts = []
@@ -193,11 +201,19 @@ def _xfade_chunk(clip_paths, output_path, fade_dur, log_fn=None, cancel_event=No
         )
         prev_v = f"[{out_v}]"
 
-    prev_a = "[0:a]"
+    clip_audio = []
+    for i in range(n):
+        if muted_flags and i < len(muted_flags) and muted_flags[i]:
+            fc_parts.append(f"[{i}:a]volume=0[am{i}]")
+            clip_audio.append(f"[am{i}]")
+        else:
+            clip_audio.append(f"[{i}:a]")
+
+    prev_a = clip_audio[0]
     for i in range(n - 1):
         out_a = "aclip" if i == n - 2 else f"ac{i}"
         fc_parts.append(
-            f"{prev_a}[{i+1}:a]acrossfade=d={fd:.3f}[{out_a}]"
+            f"{prev_a}{clip_audio[i + 1]}acrossfade=d={fd:.3f}[{out_a}]"
         )
         prev_a = f"[{out_a}]"
 
@@ -210,10 +226,11 @@ def _xfade_chunk(clip_paths, output_path, fade_dur, log_fn=None, cancel_event=No
 
 
 def xfade_concat(clip_paths, output_path, fade_dur, music_path=None, music_vol=0.3,
-                 log_fn=None, cancel_event=None):
+                 log_fn=None, cancel_event=None, muted_flags=None):
     """
     Concatenate clips with xfade video transitions and acrossfade audio crossfades.
     Optionally mixes in a music track at music_vol (0.0–1.0) relative level.
+    muted_flags: optional list[bool] parallel to clip_paths; True silences that clip's audio.
     Large clip sets are processed in chunks to stay within ffmpeg's limits.
     """
     n = len(clip_paths)
@@ -233,7 +250,11 @@ def xfade_concat(clip_paths, output_path, fade_dur, music_path=None, music_vol=0
             if log_fn:
                 log_fn(f"  Batch {idx+1}/{n_chunks} ({len(chunk)} clips)…")
             chunk_out = tmp_dir / f"_chunk_{idx:04d}.mp4"
-            _xfade_chunk(chunk, chunk_out, fade_dur, log_fn=log_fn, cancel_event=cancel_event)
+            chunk_start = idx * _XFADE_CHUNK
+            chunk_flags = (muted_flags[chunk_start:chunk_start + len(chunk)]
+                           if muted_flags else None)
+            _xfade_chunk(chunk, chunk_out, fade_dur, log_fn=log_fn, cancel_event=cancel_event,
+                         muted_flags=chunk_flags)
             chunk_outputs.append(chunk_out)
 
         if log_fn:
@@ -275,16 +296,22 @@ def xfade_concat(clip_paths, output_path, fade_dur, music_path=None, music_vol=0
     if music_path:
         cmd += ["-i", str(music_path)]
 
+    clip0_vol = "0.0" if (muted_flags and muted_flags[0]) else "1.0"
+
     if n == 1:
         if music_path:
             fc = (
-                f"[0:a]volume=1.0[aclip];"
+                f"[0:a]volume={clip0_vol}[aclip];"
                 f"[{music_idx}:a]volume={music_vol:.3f}[amus];"
                 f"[aclip][amus]amix=inputs=2:duration=first:normalize=0[aout]"
             )
             cmd += ["-filter_complex", fc, "-map", "0:v", "-map", "[aout]"]
             cmd += ["-c:v", "libx264", "-preset", "fast", "-crf", "22", "-pix_fmt", "yuv420p"]
             cmd += ["-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"]
+        elif muted_flags and muted_flags[0]:
+            fc = "[0:a]volume=0[aout]"
+            cmd += ["-filter_complex", fc, "-map", "0:v", "-map", "[aout]"]
+            cmd += ["-c:v", "copy", "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"]
         else:
             cmd += ["-map", "0:v", "-map", "0:a", "-c", "copy"]
         cmd.append(str(output_path))
@@ -303,11 +330,19 @@ def xfade_concat(clip_paths, output_path, fade_dur, music_path=None, music_vol=0
         )
         prev_v = f"[{out_v}]"
 
-    prev_a = "[0:a]"
+    clip_audio = []
+    for i in range(n):
+        if muted_flags and i < len(muted_flags) and muted_flags[i]:
+            fc_parts.append(f"[{i}:a]volume=0[am{i}]")
+            clip_audio.append(f"[am{i}]")
+        else:
+            clip_audio.append(f"[{i}:a]")
+
+    prev_a = clip_audio[0]
     for i in range(n - 1):
         out_a = "aclip" if i == n - 2 else f"ac{i}"
         fc_parts.append(
-            f"{prev_a}[{i+1}:a]acrossfade=d={fade_dur:.3f}[{out_a}]"
+            f"{prev_a}{clip_audio[i + 1]}acrossfade=d={fade_dur:.3f}[{out_a}]"
         )
         prev_a = f"[{out_a}]"
 
@@ -324,4 +359,31 @@ def xfade_concat(clip_paths, output_path, fade_dur, music_path=None, music_vol=0
     cmd += ["-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"]
     cmd.append(str(output_path))
 
+    _run_ffmpeg(cmd, log_fn=log_fn, cancel_event=cancel_event)
+
+
+def apply_outro(input_path, output_path, outro_dur, fade_start=None,
+                cancel_event=None, log_fn=None):
+    """Re-encode final video with a fade-to-black and audio fade-out at the end.
+
+    fade_start: when to begin the fade; defaults to (duration - outro_dur).
+    """
+    info = get_video_info(str(input_path))
+    if not info:
+        raise RuntimeError(f"Could not probe {input_path}")
+    total = info["duration"]
+    if fade_start is None:
+        fade_start = max(0.0, total - outro_dur)
+    else:
+        fade_start = max(0.0, min(float(fade_start), total - 0.5))
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", str(input_path),
+        "-vf", f"fade=t=out:st={fade_start:.3f}:d={outro_dur:.3f}",
+        "-af", f"afade=t=out:st={fade_start:.3f}:d={outro_dur:.3f}",
+        "-c:v", "libx264", "-preset", "fast", "-crf", "22", "-pix_fmt", "yuv420p",
+        "-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2",
+        str(output_path),
+    ]
     _run_ffmpeg(cmd, log_fn=log_fn, cancel_event=cancel_event)
