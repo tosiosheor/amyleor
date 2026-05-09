@@ -1,9 +1,10 @@
+import os
 import subprocess
 import threading
 from pathlib import Path
 
 from audio import mix_music
-from constants import OUT_FPS, OUT_H, OUT_W
+from constants import FONT_CANDIDATES, OUT_FPS, OUT_H, OUT_W
 from ffmpeg_utils import _run, _run_ffmpeg, get_video_info
 
 _XFADE_CHUNK = 60  # max clips per ffmpeg invocation
@@ -360,6 +361,88 @@ def xfade_concat(clip_paths, output_path, fade_dur, music_path=None, music_vol=0
     cmd.append(str(output_path))
 
     _run_ffmpeg(cmd, log_fn=log_fn, cancel_event=cancel_event)
+
+
+def apply_intro(input_path, output_path, intro_cfg, cancel_event=None, log_fn=None):
+    """Apply intro text overlays to the start of the video.
+
+    Modes:
+      'over_clips'  – text fades in/out over actual video content.
+      'over_black'  – video is black during intro; clips fade in after the last line.
+    """
+    lines = intro_cfg.get("lines", [])
+    mode = intro_cfg.get("mode", "over_clips")
+    fade_dur = max(0.1, float(intro_cfg.get("fade_dur", 0.5)))
+
+    valid_lines = [
+        (l["text"].strip(), float(l.get("duration", 5.0)))
+        for l in lines
+        if l.get("text", "").strip()
+    ]
+    if not valid_lines:
+        return True
+
+    info = get_video_info(str(input_path))
+    if not info:
+        raise RuntimeError("Could not read video info for intro")
+    font_size = max(60, int(info["height"] * 0.09))
+
+    font_file = next((f for f in FONT_CANDIDATES if os.path.exists(f)), None)
+
+    total_intro_dur = sum(d for _, d in valid_lines)
+    vf_parts = []
+    af_filter = None
+
+    if mode == "over_black":
+        fade_in_start = max(0.0, total_intro_dur - fade_dur)
+        vf_parts.append(f"fade=t=in:st={fade_in_start:.3f}:d={fade_dur:.3f}")
+        af_filter = f"afade=t=in:st={fade_in_start:.3f}:d={fade_dur:.3f}"
+
+    t = 0.0
+    for text, dur in valid_lines:
+        end = t + dur
+        alpha_expr = (
+            f"max(0,min(1,min((t-{t:.3f})/{fade_dur:.3f},({end:.3f}-t)/{fade_dur:.3f})))"
+        )
+        # Escape special chars for FFmpeg drawtext option values
+        safe = text.replace("\\", "\\\\").replace("'", "’").replace(":", "\\:")
+
+        dt_parts = [
+            f"text='{safe}'",
+            "x=(w-text_w)/2",
+            "y=(h-text_h)/2",
+            f"fontsize={font_size}",
+            "fontcolor=white",
+            "borderw=4",
+            "bordercolor=black",
+            f"alpha='{alpha_expr}'",
+            f"enable='between(t,{t:.3f},{end:.3f})'",
+        ]
+        if font_file:
+            ff = font_file.replace("\\", "/")
+            # Escape Windows drive-letter colon for FFmpeg filter parser
+            if len(ff) > 1 and ff[1] == ":":
+                ff = ff[0] + "\\:" + ff[2:]
+            dt_parts.insert(0, f"fontfile='{ff}'")
+
+        vf_parts.append("drawtext=" + ":".join(dt_parts))
+        t = end
+
+    cmd = ["ffmpeg", "-y", "-i", str(input_path)]
+    cmd += ["-vf", ",".join(vf_parts)]
+    if af_filter:
+        cmd += ["-af", af_filter]
+    cmd += ["-c:v", "libx264", "-preset", "fast", "-crf", "22", "-pix_fmt", "yuv420p"]
+    cmd += ["-c:a", "aac", "-b:a", "128k", "-ar", "44100", "-ac", "2"]
+    cmd.append(str(output_path))
+
+    try:
+        _run_ffmpeg(cmd, log_fn=log_fn, cancel_event=cancel_event)
+    except RuntimeError as exc:
+        if str(exc) == "Cancelled":
+            return False
+        raise
+    return True
 
 
 def apply_outro(input_path, output_path, outro_dur, fade_start=None,

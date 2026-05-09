@@ -1,15 +1,32 @@
-# Video Mixer
+# Amyleor video mixer
 
-A local web app that combines landscape and portrait clips into a single 1920×1080 landscape video, with optional music, beat-synced transitions, countdown overlays, and smart clip selection. Settings and a visual timeline run in the browser; all encoding happens via a local Python/FFmpeg server.
+A local web app that combines multiple video clips into a single 1920×1080 landscape video, with optional music, beat-synced transitions, countdown overlays, and smart clip selection. Clips are pulled together randomly but ordered by intensity.
+
+Settings and a visual timeline run in the browser; all encoding happens via a local Python/FFmpeg server.
+
+To run:
 
 ```
 python3 amyleor.py           # opens in default browser
 python3 amyleor.py --app     # opens in a native window (requires pywebview)
 ```
 
+To install:
+
 **Requires:** `ffmpeg` + `ffprobe` — `brew install ffmpeg`  
 **Requires:** `fastapi`, `uvicorn` — `pip install fastapi "uvicorn[standard] pillow librosa"`  
 **Optional:** `pywebview` — `pip install pywebview` (native window instead of browser tab)
+
+---
+
+Recommended approach:
+
+- Arrange your video clips into folders, alphabetically sorted by the order you want them to appear, e.g. buildup, action, climax. The tool will pick randomly from each folder to a specific proportion of the overall video, but then sort those randomly sorted clips in order of intensity.
+- Put music into a music folder. Music will be randomly selected to fill the time, and then sorted by intensity.
+- Use both as the input folders. 
+- Check the settings - countdown, intro, outro - and then 'Generate Plan'.
+- Review the plan. You can make some tweaks here and there. A critical thing might be to mute any videos that have music that might compete with yours.
+- Generate video.
 
 ---
 

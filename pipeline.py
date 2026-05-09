@@ -40,7 +40,7 @@ from cache import (
 from constants import CLIP_CACHE_DIR_NAME, MUSIC_EXTENSIONS, VIDEO_EXTENSIONS
 from ffmpeg_utils import get_video_info
 from overlay import apply_countdown_overlay, build_countdown_events
-from video import apply_outro, concat_clips, process_clip, xfade_concat
+from video import apply_intro, apply_outro, concat_clips, process_clip, xfade_concat
 
 
 def _noop(*a, **kw):
@@ -221,7 +221,7 @@ def do_analyse(
     music_folder, music_vol, fade_dur, beat_sync, beats_per_clip,
     countdown_cfg=None, clip_order="random",
     subfolder_split="equal", use_all=False, tile_portrait=True,
-    auto_mute=False, outro_dur=0.0,
+    auto_mute=False, outro_dur=0.0, intro_cfg=None,
     *, log_fn=_noop, status_fn=_noop, prog_fn=_noop, cancel_event=None,
 ):
     """Analyse sources and return a plan dict, or None if cancelled."""
@@ -742,6 +742,19 @@ def do_analyse(
             if dirty:
                 _save_cache(folder_str, cache_data)
 
+    # Load manual mute overrides (user-set via UI; take priority over auto-detection and defaults)
+    manual_mute_by_idx: dict[int, bool] = {}
+    _folder_clips_manual: dict[str, list] = {}
+    for idx, (vf, info, start, dur) in enumerate(clips):
+        _folder_clips_manual.setdefault(str(vf.parent), []).append((idx, vf, start, dur))
+    for folder_str, fclips in _folder_clips_manual.items():
+        cache_data = _load_cache(folder_str)
+        manual = cache_data.get("manual_mute", {})
+        for idx, vf, start, dur in fclips:
+            cache_key = f"{vf.name}:{start:.3f}:{dur:.3f}"
+            if cache_key in manual:
+                manual_mute_by_idx[idx] = manual[cache_key]["muted"]
+
     # Sort music chill → intense
     if music_tracks:
         selected, acc = [], 0.0
@@ -771,7 +784,7 @@ def do_analyse(
                 "height": info["height"],
                 "has_audio": info["has_audio"],
                 "motion": list(motion_by_idx[i]) if i in motion_by_idx else None,
-                "muted": music_only_by_idx.get(i, False),
+                "muted": manual_mute_by_idx.get(i, music_only_by_idx.get(i, False)),
             }
             for i, (vf, info, start, dur) in enumerate(clips)
         ],
@@ -782,6 +795,7 @@ def do_analyse(
         "countdown": None,
         "outro_dur": outro_dur,
         "outro_start": outro_start,
+        "intro": intro_cfg,
     }
 
     if countdown_cfg:
@@ -995,6 +1009,24 @@ def do_generate(
             log_fn("\nPass 1: Concatenating clips…", color="accent")
             status_fn("Concatenating…")
             concat_clips(encoded, Path(output))
+
+    intro_cfg = plan.get("intro")
+    if intro_cfg and intro_cfg.get("lines"):
+        log_fn("\nPass: Applying intro text…", color="accent")
+        status_fn("Intro text…")
+        prog_fn(88)
+        intro_tmp = Path(output).with_suffix(".intro_tmp.mp4")
+        ok = apply_intro(
+            Path(output), intro_tmp, intro_cfg,
+            cancel_event=cancel_event,
+            log_fn=lambda m: log_fn(m, color="subtle"),
+        )
+        if not ok:
+            log_fn("Cancelled.", color="subtle")
+            status_fn("Cancelled")
+            intro_tmp.unlink(missing_ok=True)
+            return
+        intro_tmp.replace(Path(output))
 
     if countdown_cfg:
         log_fn("\nPass 2: Burning countdown overlay (full re-encode of video)…", color="accent")

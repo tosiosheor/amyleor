@@ -44,6 +44,10 @@ _DEFAULT_SETTINGS = {
     "subfolder_split": "equal",
     "use_all": False,
     "tile_portrait": True,
+    "use_intro": False,
+    "intro_mode": "over_clips",
+    "intro_fade_dur": "0.5",
+    "intro_lines": "[]",
     "use_outro": False,
     "outro_dur": "3",
     "use_countdown": False,
@@ -255,6 +259,19 @@ def _parse_settings(s: dict) -> dict:
     auto_mute = bool(s.get("auto_mute", False))
     outro_dur = float(s["outro_dur"]) if s.get("use_outro") else 0.0
 
+    intro_cfg = None
+    if s.get("use_intro"):
+        import json as _json
+        try:
+            lines = _json.loads(s.get("intro_lines", "[]"))
+        except Exception:
+            lines = []
+        intro_cfg = {
+            "lines": lines,
+            "mode": s.get("intro_mode", "over_clips"),
+            "fade_dur": float(s.get("intro_fade_dur", 0.5)),
+        }
+
     return dict(
         folder=s.get("input", ""),
         output=s.get("output", ""),
@@ -273,6 +290,7 @@ def _parse_settings(s: dict) -> dict:
         tile_portrait=tile_portrait,
         auto_mute=auto_mute,
         outro_dur=outro_dur,
+        intro_cfg=intro_cfg,
     )
 
 
@@ -299,6 +317,27 @@ def _make_callbacks(q: queue.Queue):
         q.put({"type": "progress", "value": val})
 
     return log_fn, status_fn, prog_fn
+
+
+# ── Manual mute override ──────────────────────────────────────────────────────
+
+@app.post("/api/mute_override")
+async def save_mute_override(request: Request):
+    from cache import _load_cache, _save_cache
+    data = await request.json()
+    path = data.get("path", "")
+    start = data.get("start")
+    dur = data.get("dur")
+    muted = data.get("muted")
+    if not path or start is None or dur is None or muted is None:
+        return {"ok": False}
+    folder = str(Path(path).parent)
+    filename = Path(path).name
+    cache_key = f"{filename}:{float(start):.3f}:{float(dur):.3f}"
+    cache_data = _load_cache(folder)
+    cache_data.setdefault("manual_mute", {})[cache_key] = {"muted": bool(muted)}
+    _save_cache(folder, cache_data)
+    return {"ok": True}
 
 
 # ── Plan endpoint ─────────────────────────────────────────────────────────────

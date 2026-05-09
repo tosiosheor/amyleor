@@ -377,6 +377,34 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
   </details>
 
   <details>
+    <summary>Intro</summary>
+    <div class="section-body">
+      <div class="form-row">
+        <input type="checkbox" id="use_intro" onchange="toggleIntro(this.checked)">
+        <label for="use_intro">Enable intro text overlay</label>
+      </div>
+      <div id="intro-fields" style="opacity:0.38;pointer-events:none">
+        <div class="form-row" style="margin-top:6px">
+          <label class="fixed">Mode</label>
+          <select id="intro_mode" onchange="saveSettings()">
+            <option value="over_clips">Over first clips</option>
+            <option value="over_black">Over black (clips fade in after)</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <label class="fixed">Fade in / out</label>
+          <input type="number" id="intro_fade_dur" class="short" value="0.5" min="0.1" step="0.1">
+          <span class="unit">seconds per line</span>
+        </div>
+        <div style="margin-top:10px">
+          <div id="intro-lines-list"></div>
+          <button class="btn sm" onclick="addIntroLine()" style="margin-top:4px">+ Add line</button>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details>
     <summary>Outro</summary>
     <div class="section-body">
       <div class="form-row">
@@ -562,6 +590,7 @@ let jsonOpen = false;
 let jsonTimer = null;
 let pxPerSec  = null;   // null = auto-fit on next render
 let dragSrcIdx = null;
+let introLines = [{text: '', duration: 5}];
 
 // ── Settings ───────────────────────────────────────────────────────────────
 
@@ -570,6 +599,7 @@ const FIELDS = [
   'use_max','max_clip','use_fade','fade_dur','use_seed','seed',
   'clip_order','subfolder_split','use_all','tile_portrait',
   'music_vol','beat_sync','beats_per_clip','auto_mute',
+  'use_intro','intro_mode','intro_fade_dur',
   'use_outro','outro_dur',
   'use_countdown','cd_corner','cd_dur','cd_ivmin','cd_ivmax',
   'cd_text1','cd_text1_dur','cd_text2','cd_text2_dur','cd_sync',
@@ -590,6 +620,11 @@ async function loadSettings() {
     toggleUseAll(        document.getElementById('use_all').checked);
     toggleOutro(         document.getElementById('use_outro').checked);
     toggleCountdown(     document.getElementById('use_countdown').checked);
+    if ('intro_lines' in data) {
+      try { introLines = JSON.parse(data.intro_lines); } catch(_) { introLines = [{text:'',duration:5}]; }
+    }
+    renderIntroLines();
+    toggleIntro(document.getElementById('use_intro').checked);
   } catch(e) { console.warn('settings load failed', e); }
 }
 
@@ -600,6 +635,7 @@ function getSettings() {
     if (!el) continue;
     s[id] = el.type === 'checkbox' ? el.checked : el.value;
   }
+  s.intro_lines = JSON.stringify(introLines);
   return s;
 }
 
@@ -618,6 +654,74 @@ document.addEventListener('change', e => { if (e.target.matches('input, select')
 
 function toggleEl(id, on) { const el = document.getElementById(id); if (el) el.disabled = !on; }
 function toggleUseAll(on) { toggleEl('duration', !on); }
+function toggleIntro(on) {
+  const f = document.getElementById('intro-fields');
+  f.style.opacity = on ? '1' : '0.38';
+  f.style.pointerEvents = on ? 'auto' : 'none';
+}
+
+function renderIntroLines() {
+  const list = document.getElementById('intro-lines-list');
+  if (!list) return;
+  list.innerHTML = '';
+  introLines.forEach((line, idx) => {
+    const row = document.createElement('div');
+    row.className = 'form-row';
+    row.style.marginBottom = '6px';
+
+    const lbl = document.createElement('label');
+    lbl.className = 'fixed';
+    lbl.style.color = 'var(--subtle)';
+    lbl.textContent = `Line ${idx + 1}`;
+    row.appendChild(lbl);
+
+    const txt = document.createElement('input');
+    txt.type = 'text';
+    txt.className = 'path';
+    txt.placeholder = 'Intro text…';
+    txt.value = line.text;
+    txt.addEventListener('input', () => { introLines[idx].text = txt.value; saveSettings(); });
+    row.appendChild(txt);
+
+    const dur = document.createElement('input');
+    dur.type = 'number';
+    dur.className = 'short';
+    dur.value = line.duration;
+    dur.min = '0.5';
+    dur.step = '0.5';
+    dur.title = 'Display duration (seconds)';
+    dur.addEventListener('input', () => { introLines[idx].duration = +dur.value || 5; saveSettings(); });
+    row.appendChild(dur);
+
+    const unit = document.createElement('span');
+    unit.className = 'unit';
+    unit.textContent = 'sec';
+    row.appendChild(unit);
+
+    if (introLines.length > 1) {
+      const rm = document.createElement('button');
+      rm.className = 'btn sm danger';
+      rm.textContent = '✕';
+      rm.addEventListener('click', () => removeIntroLine(idx));
+      row.appendChild(rm);
+    }
+
+    list.appendChild(row);
+  });
+}
+
+function addIntroLine() {
+  introLines.push({text: '', duration: 5});
+  renderIntroLines();
+  saveSettings();
+}
+
+function removeIntroLine(idx) {
+  introLines.splice(idx, 1);
+  renderIntroLines();
+  saveSettings();
+}
+
 function toggleOutro(on) {
   const f = document.getElementById('outro-fields');
   f.style.opacity = on ? '1' : '0.38';
@@ -689,12 +793,14 @@ async function startPlan() {
 
 async function startGenerate() {
   if (!plan) return;
+  const outputPath = document.getElementById('output').value.trim();
+  if (!outputPath) { alert('Please set an output file path.'); return; }
   setRunning(true);
   document.getElementById('progress').value = 0;
   document.getElementById('status-text').textContent = 'Generating…';
   clearLog();
   try {
-    const data = await post('/api/generate', plan);
+    const data = await post('/api/generate', {...plan, output_path: outputPath});
     if (data.error) { appendLog('❌  ' + data.error, 'error'); setRunning(false); return; }
     openStream(data.job_id);
   } catch(e) { appendLog('❌  ' + e.message, 'error'); setRunning(false); }
@@ -714,6 +820,10 @@ async function post(url, body) {
 
 function setPlan(p) {
   plan = p; selIdx = -1; pxPerSec = null;
+  if (p && p.output_path) {
+    document.getElementById('output').value = p.output_path;
+    saveSettings();
+  }
   renderTimeline(); renderEditor();
   if (jsonOpen) syncToJson();
 }
@@ -938,6 +1048,14 @@ function renderEditor() {
 function updateClip(field, val) {
   if (selIdx < 0 || !plan) return;
   plan.clips[selIdx][field] = val;
+  if (field === 'muted') {
+    const c = plan.clips[selIdx];
+    fetch('/api/mute_override', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({path: c.path, start: c.start, dur: c.duration, muted: val})
+    });
+  }
   renderTimeline();
   if (jsonOpen) syncToJson();
 }
@@ -1029,6 +1147,7 @@ function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
 
 // ── Init ───────────────────────────────────────────────────────────────────
 
+renderIntroLines();
 loadSettings();
 </script>
 </body>
