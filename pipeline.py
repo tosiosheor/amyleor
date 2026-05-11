@@ -221,7 +221,7 @@ def do_analyse(
     music_folder, music_vol, fade_dur, beat_sync, beats_per_clip,
     countdown_cfg=None, clip_order="random",
     subfolder_split="equal", use_all=False, tile_portrait=True,
-    auto_mute=False, outro_dur=0.0, intro_cfg=None,
+    auto_mute=False, outro_dur=0.0, intro_cfg=None, font_path="",
     *, log_fn=_noop, status_fn=_noop, prog_fn=_noop, cancel_event=None,
 ):
     """Analyse sources and return a plan dict, or None if cancelled."""
@@ -796,6 +796,7 @@ def do_analyse(
         "outro_dur": outro_dur,
         "outro_start": outro_start,
         "intro": intro_cfg,
+        "font_path": font_path,
     }
 
     if countdown_cfg:
@@ -849,6 +850,7 @@ def do_generate(
     countdown_cfg = plan.get("countdown")
     outro_dur = plan.get("outro_dur", 0.0)
     outro_start = plan.get("outro_start")
+    font_path = plan.get("font_path", "")
 
     music_tracks = [(Path(m["path"]), m["duration"]) for m in music_data]
     total = sum(c["duration"] for c in clips_data)
@@ -1020,6 +1022,7 @@ def do_generate(
             Path(output), intro_tmp, intro_cfg,
             cancel_event=cancel_event,
             log_fn=lambda m: log_fn(m, color="subtle"),
+            font_path=font_path,
         )
         if not ok:
             log_fn("Cancelled.", color="subtle")
@@ -1089,6 +1092,7 @@ def do_generate(
             ok = apply_countdown_overlay(
                 Path(output), overlay_tmp, events, countdown_cfg["corner"], cancel_event,
                 log_fn=lambda m: log_fn(m, color="subtle"),
+                font_path=font_path,
             )
             if not ok:
                 log_fn("Cancelled.", color="subtle")

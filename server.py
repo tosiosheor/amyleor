@@ -60,7 +60,81 @@ _DEFAULT_SETTINGS = {
     "cd_text2": "RELEASE",
     "cd_text2_dur": "4",
     "cd_sync": True,
+    "font_path": "",
 }
+
+# ── Font discovery ───────────────────────────────────────────────────────────
+
+def _scan_fonts() -> list:
+    dirs = []
+    if sys.platform == "win32":
+        import os as _os
+        dirs = [
+            Path("C:/Windows/Fonts"),
+            Path(_os.environ.get("LOCALAPPDATA", "")) / "Microsoft/Windows/Fonts",
+        ]
+    elif sys.platform == "darwin":
+        dirs = [
+            Path("/Library/Fonts"),
+            Path("/System/Library/Fonts"),
+            Path.home() / "Library/Fonts",
+        ]
+    else:
+        dirs = [
+            Path("/usr/share/fonts"),
+            Path("/usr/local/share/fonts"),
+            Path.home() / ".fonts",
+        ]
+    exts = {".ttf", ".otf", ".ttc"}
+    seen: set[str] = set()
+    fonts = []
+    for d in dirs:
+        if d.exists():
+            for f in sorted(d.rglob("*")):
+                key = str(f).lower()
+                if f.suffix.lower() in exts and f.is_file() and key not in seen:
+                    seen.add(key)
+                    fonts.append({"name": f.stem, "path": str(f)})
+    return sorted(fonts, key=lambda x: x["name"].lower())
+
+
+@app.get("/api/fonts")
+async def list_fonts():
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, _scan_fonts)
+
+
+@app.get("/api/font_preview")
+async def font_preview_endpoint(path: str):
+    def _render():
+        try:
+            from PIL import Image, ImageDraw, ImageFont
+            import io
+            font = ImageFont.truetype(path, 28)
+            text = "Abc 123"
+            dummy = Image.new("RGBA", (1, 1))
+            draw = ImageDraw.Draw(dummy)
+            bbox = draw.textbbox((0, 0), text, font=font)
+            w = max(1, bbox[2] - bbox[0])
+            h = max(1, bbox[3] - bbox[1])
+            pad = 8
+            img = Image.new("RGB", (w + pad * 2, h + pad * 2), (44, 44, 46))
+            ImageDraw.Draw(img).text(
+                (pad - bbox[0], pad - bbox[1]), text, font=font, fill=(245, 245, 247)
+            )
+            buf = io.BytesIO()
+            img.save(buf, format="PNG")
+            return buf.getvalue()
+        except Exception:
+            return None
+
+    loop = asyncio.get_event_loop()
+    data = await loop.run_in_executor(None, _render)
+    if not data:
+        return Response(status_code=404)
+    return Response(content=data, media_type="image/png",
+                    headers={"Cache-Control": "max-age=3600"})
+
 
 # ── Static / index ─────────────────────────────────────────────────────────────
 
@@ -275,6 +349,7 @@ def _parse_settings(s: dict) -> dict:
     return dict(
         folder=s.get("input", ""),
         output=s.get("output", ""),
+        font_path=s.get("font_path", ""),
         target_dur=target_dur,
         max_clip=max_clip,
         seed=seed,

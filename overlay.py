@@ -6,9 +6,14 @@ from constants import FONT_CANDIDATES
 from ffmpeg_utils import _run_ffmpeg, get_video_info
 
 
-def _find_font(font_size):
+def _find_font(font_size, font_path=None):
     """Return an ImageFont for the given size, falling back to the default."""
     from PIL import ImageFont
+    if font_path and os.path.exists(font_path):
+        try:
+            return ImageFont.truetype(font_path, font_size)
+        except Exception:
+            pass
     for f in FONT_CANDIDATES:
         if os.path.exists(f):
             try:
@@ -21,12 +26,12 @@ def _find_font(font_size):
         return ImageFont.load_default()
 
 
-def _render_overlay_png(text, font_size, path, min_height=0):
+def _render_overlay_png(text, font_size, path, min_height=0, font_path=None):
     """Render text to a transparent PNG. Returns (width, height)."""
     from PIL import Image, ImageDraw
 
     border_w = 4
-    font = _find_font(font_size)
+    font = _find_font(font_size, font_path)
 
     dummy = Image.new("RGBA", (1, 1))
     draw  = ImageDraw.Draw(dummy)
@@ -35,7 +40,7 @@ def _render_overlay_png(text, font_size, path, min_height=0):
 
     if min_height > 0 and h < min_height:
         font_size = int(font_size * min_height / h * 1.05)
-        font = _find_font(font_size)
+        font = _find_font(font_size, font_path)
         bbox = draw.textbbox((0, 0), text, font=font, stroke_width=border_w)
         w, h = max(1, bbox[2] - bbox[0]), max(1, bbox[3] - bbox[1])
 
@@ -124,7 +129,7 @@ def build_countdown_events(
     return events
 
 
-def apply_countdown_overlay(input_path, output_path, events, corner, cancel_event=None, log_fn=None):
+def apply_countdown_overlay(input_path, output_path, events, corner, cancel_event=None, log_fn=None, font_path=None):
     """Re-encode video with countdown/text overlays using Pillow-rendered PNGs."""
     if not events:
         return True
@@ -150,7 +155,7 @@ def apply_countdown_overlay(input_path, output_path, events, corner, cancel_even
             if text not in text_to_entry:
                 idx = len(png_paths)
                 p = os.path.join(tmpdir, f"ovl_{idx:04d}.png")
-                pw, ph = _render_overlay_png(text, max(90, min_h), p, min_height=min_h)
+                pw, ph = _render_overlay_png(text, max(90, min_h), p, min_height=min_h, font_path=font_path)
                 png_paths.append(p)
                 text_to_entry[text] = (idx + 1, pw, ph)  # +1: input 0 is video
 

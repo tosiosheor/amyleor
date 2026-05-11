@@ -422,6 +422,21 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
   </details>
 
   <details>
+    <summary>Text Style</summary>
+    <div class="section-body">
+      <div class="form-row">
+        <label class="fixed">Font</label>
+        <div style="display:flex;flex-direction:column;gap:8px;flex:1">
+          <select id="font_path" onchange="onFontChange()" style="max-width:320px">
+            <option value="">Auto (system default)</option>
+          </select>
+          <img id="font-preview" src="" alt="" style="display:none;height:44px;border-radius:6px;align-self:flex-start">
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details>
     <summary>Countdown Overlay</summary>
     <div class="section-body">
       <div class="form-row">
@@ -603,7 +618,32 @@ const FIELDS = [
   'use_outro','outro_dur',
   'use_countdown','cd_corner','cd_dur','cd_ivmin','cd_ivmax',
   'cd_text1','cd_text1_dur','cd_text2','cd_text2_dur','cd_sync',
+  'font_path',
 ];
+
+async function loadFonts() {
+  try {
+    const fonts = await (await fetch('/api/fonts')).json();
+    const sel = document.getElementById('font_path');
+    for (const f of fonts) {
+      const opt = document.createElement('option');
+      opt.value = f.path;
+      opt.textContent = f.name;
+      sel.appendChild(opt);
+    }
+  } catch(e) { console.warn('loadFonts failed', e); }
+}
+
+function onFontChange() {
+  const path = document.getElementById('font_path').value;
+  const img = document.getElementById('font-preview');
+  if (path) {
+    img.style.display = 'block';
+    img.src = '/api/font_preview?path=' + encodeURIComponent(path);
+  } else {
+    img.style.display = 'none';
+  }
+}
 
 async function loadSettings() {
   try {
@@ -800,7 +840,8 @@ async function startGenerate() {
   document.getElementById('status-text').textContent = 'Generating…';
   clearLog();
   try {
-    const data = await post('/api/generate', {...plan, output_path: outputPath});
+    const fontPath = document.getElementById('font_path')?.value ?? '';
+    const data = await post('/api/generate', {...plan, output_path: outputPath, font_path: fontPath});
     if (data.error) { appendLog('❌  ' + data.error, 'error'); setRunning(false); return; }
     openStream(data.job_id);
   } catch(e) { appendLog('❌  ' + e.message, 'error'); setRunning(false); }
@@ -1147,8 +1188,12 @@ function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
 
 // ── Init ───────────────────────────────────────────────────────────────────
 
-renderIntroLines();
-loadSettings();
+(async () => {
+  renderIntroLines();
+  await loadFonts();
+  await loadSettings();
+  onFontChange();
+})();
 </script>
 </body>
 </html>

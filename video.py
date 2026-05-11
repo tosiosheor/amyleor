@@ -363,7 +363,7 @@ def xfade_concat(clip_paths, output_path, fade_dur, music_path=None, music_vol=0
     _run_ffmpeg(cmd, log_fn=log_fn, cancel_event=cancel_event)
 
 
-def apply_intro(input_path, output_path, intro_cfg, cancel_event=None, log_fn=None):
+def apply_intro(input_path, output_path, intro_cfg, cancel_event=None, log_fn=None, font_path=None):
     """Apply intro text overlays to the start of the video.
 
     Modes:
@@ -387,7 +387,10 @@ def apply_intro(input_path, output_path, intro_cfg, cancel_event=None, log_fn=No
         raise RuntimeError("Could not read video info for intro")
     font_size = max(60, int(info["height"] * 0.09))
 
-    font_file = next((f for f in FONT_CANDIDATES if os.path.exists(f)), None)
+    if font_path and os.path.exists(font_path):
+        font_file = font_path
+    else:
+        font_file = next((f for f in FONT_CANDIDATES if os.path.exists(f)), None)
 
     total_intro_dur = sum(d for _, d in valid_lines)
     vf_parts = []
