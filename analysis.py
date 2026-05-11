@@ -115,7 +115,8 @@ def analyze_portrait_motion(src, start, duration, width, height):
 def detect_change_points(path, log_fn=None):
     """
     Detect musical structure change points (builds, drops, section transitions).
-    Returns a sorted list of timestamps in seconds, or None on failure.
+    Returns (times, z_scores) where both are parallel lists, or (None, None) on failure.
+    z_scores are absolute z-score magnitudes — higher means more significant.
     """
     try:
         import librosa
@@ -140,6 +141,7 @@ def detect_change_points(path, log_fn=None):
         lookback = int(8.0 / bin_sec)   # 8-second context window
         min_gap = 10.0                   # minimum gap between change points (seconds)
         change_times = []
+        z_scores = []
         last_t = -min_gap
 
         for i in range(lookback, n_bins):
@@ -147,19 +149,20 @@ def detect_change_points(path, log_fn=None):
             z = (bins[i] - past.mean()) / (past.std() + 1e-6)
             if abs(z) >= 2.0 and bin_times[i] - last_t >= min_gap:
                 change_times.append(float(bin_times[i]))
+                z_scores.append(float(abs(z)))
                 last_t = bin_times[i]
 
         if log_fn:
             log_fn(f"  Found {len(change_times)} musical change point(s)")
-        return change_times or None
+        return (change_times, z_scores) if change_times else (None, None)
     except ImportError:
         if log_fn:
             log_fn("  librosa unavailable — countdown music sync skipped")
-        return None
+        return (None, None)
     except Exception as e:
         if log_fn:
             log_fn(f"  Change point detection failed: {e}")
-        return None
+        return (None, None)
 
 
 def detect_is_music_only(clip_path, start, duration):

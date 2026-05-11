@@ -331,6 +331,7 @@ def do_analyse(
             if beats is None:
                 log_fn("  Falling back to regular clip timing.", color="subtle")
 
+        change_point_scores = None
         need_change_points = _subfolder_mode or (countdown_cfg and countdown_cfg["sync"]) or outro_dur > 0
         if need_change_points and music_files:
             cpcache = mcache_data.setdefault("change_points", {})
@@ -338,14 +339,18 @@ def do_analyse(
             key = first.name
             if key in cpcache and _fp_match(first, cpcache[key]):
                 change_points = cpcache[key]["points"]
+                change_point_scores = cpcache[key].get("scores")
                 log_fn(f"  {len(change_points)} change point(s) (cached)", color="subtle")
             else:
-                change_points = detect_change_points(
+                change_points, change_point_scores = detect_change_points(
                     first, log_fn=lambda m: log_fn(m, color="subtle")
                 )
                 if change_points is not None:
                     mtime, size = _fingerprint(first)
-                    cpcache[key] = {"mtime": mtime, "size": size, "points": change_points}
+                    cpcache[key] = {
+                        "mtime": mtime, "size": size,
+                        "points": change_points, "scores": change_point_scores,
+                    }
                     mcache_dirty = True
 
         if mcache_dirty:
@@ -704,8 +709,10 @@ def do_analyse(
             if dirty:
                 _save_cache(folder_str, cache_data)
 
-    # Auto-mute: detect music-only clips and mark them muted
+    # Auto-mute: detect music-only clips and mark them muted.
+    # Clips that are not detected as music are flagged for visual loud-audio review.
     music_only_by_idx = {}
+    loud_review_by_idx = {}
     if auto_mute:
         log_fn("\nDetecting music-only clips…", color="accent")
         folder_clips_music: dict = {}
@@ -725,7 +732,7 @@ def do_analyse(
                 if cache_key in mcache and _fp_match(vf, mcache[cache_key]):
                     is_music = mcache[cache_key]["is_music_only"]
                     log_fn(
-                        f"  {vf.name}: {'music only' if is_music else 'has voice'} (cached)",
+                        f"  {vf.name}: {'music only' if is_music else 'not music (flagged loud)'} (cached)",
                         color="subtle",
                     )
                 else:
@@ -735,10 +742,11 @@ def do_analyse(
                     mcache[cache_key] = {"mtime": mtime, "size": size, "is_music_only": is_music}
                     dirty = True
                     log_fn(
-                        f"    → {'music only — will mute' if is_music else 'voice detected — keeping audio'}",
+                        f"    → {'music only — will mute' if is_music else 'not music — flagged loud for review'}",
                         color="subtle",
                     )
                 music_only_by_idx[idx] = is_music
+                loud_review_by_idx[idx] = not is_music
             if dirty:
                 _save_cache(folder_str, cache_data)
 
@@ -784,6 +792,7 @@ def do_analyse(
                 "height": info["height"],
                 "has_audio": info["has_audio"],
                 "motion": list(motion_by_idx[i]) if i in motion_by_idx else None,
+                "audio_review_loud": loud_review_by_idx.get(i, False),
                 "muted": manual_mute_by_idx.get(i, music_only_by_idx.get(i, False)),
             }
             for i, (vf, info, start, dur) in enumerate(clips)
@@ -811,6 +820,7 @@ def do_analyse(
             "text2_dur": countdown_cfg["text2_dur"],
             "sync": countdown_cfg["sync"],
             "change_points": change_points,
+            "change_point_scores": change_point_scores,
         }
 
     prog_fn(40)
@@ -1047,6 +1057,7 @@ def do_generate(
                 if n_clips > 1 else 0.0
             )
             stored_cps = countdown_cfg.get("change_points")
+            stored_cp_scores = countdown_cfg.get("change_point_scores")
             if stored_cps:
                 # Convert music-timeline change points to video timeline by subtracting
                 # the accumulated crossfade offset for each point's position in the clip list.
@@ -1063,6 +1074,7 @@ def do_generate(
                             break
                     else:
                         cp.append(max(0.0, t - (n_clips - 1) * actual_fd))
+                cp_scores = stored_cp_scores  # parallel to stored_cps; indices preserved
             else:
                 # No stored change points — fall back to clip boundary positions
                 cumsum = 0.0
@@ -1070,8 +1082,10 @@ def do_generate(
                 for i, d in enumerate(clip_durations[:-1]):
                     cumsum += d
                     cp.append(max(0.0, cumsum - (i + 1) * actual_fd))
+                cp_scores = None
         else:
             cp = None
+            cp_scores = None
 
         events = build_countdown_events(
             total_dur=final_dur,
@@ -1083,6 +1097,7 @@ def do_generate(
             text2=countdown_cfg["text2"],
             text2_dur=countdown_cfg["text2_dur"],
             change_points=cp,
+            change_point_scores=cp_scores,
             rng=random.Random(seed),
         )
 

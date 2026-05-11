@@ -256,6 +256,61 @@ async def thumbnail(path: str, time: float = 0.0):
                     headers={"Cache-Control": "max-age=3600"})
 
 
+@app.get("/api/clip_preview")
+async def clip_preview(path: str, start: float = 0.0, duration: float = 5.0):
+    src = Path(path).expanduser()
+    if not src.is_file():
+        return JSONResponse({"error": "file not found"}, status_code=404)
+
+    safe_start = max(0.0, start)
+    safe_duration = max(0.1, min(duration, 300.0))
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error",
+        "-ss", f"{safe_start:.3f}",
+        "-i", str(src),
+        "-t", f"{safe_duration:.3f}",
+        "-map", "0:v:0",
+        "-map", "0:a:0?",
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        "-crf", "28",
+        "-pix_fmt", "yuv420p",
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-ac", "2",
+        "-movflags", "frag_keyframe+empty_moov+default_base_moof",
+        "-f", "mp4",
+        "pipe:1",
+    ]
+    proc = subprocess.Popen(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+    )
+
+    async def body():
+        loop = asyncio.get_event_loop()
+        try:
+            assert proc.stdout is not None
+            while True:
+                chunk = await loop.run_in_executor(None, proc.stdout.read, 65536)
+                if not chunk:
+                    break
+                yield chunk
+            await loop.run_in_executor(None, proc.wait)
+        finally:
+            if proc.poll() is None:
+                proc.kill()
+            if proc.stdout is not None:
+                proc.stdout.close()
+
+    return StreamingResponse(
+        body(),
+        media_type="video/mp4",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
 # ── Open file ─────────────────────────────────────────────────────────────────
 
 @app.post("/api/open")
@@ -269,6 +324,28 @@ async def open_path(request: Request):
             subprocess.run(["start", "", path], shell=True, check=False)
         else:
             subprocess.run(["xdg-open", path], check=False)
+    return {"ok": True}
+
+
+@app.post("/api/reveal")
+async def reveal_path(request: Request):
+    data = await request.json()
+    path = data.get("path", "")
+    if not path:
+        return {"ok": False, "error": "missing path"}
+
+    p = Path(path).expanduser()
+    if not p.exists():
+        return {"ok": False, "error": "path not found"}
+
+    if sys.platform == "darwin":
+        subprocess.run(["open", "-R", str(p)], check=False)
+    elif sys.platform == "win32":
+        subprocess.run(["explorer", "/select,", str(p)], check=False)
+    else:
+        target = p.parent if p.is_file() else p
+        subprocess.run(["xdg-open", str(target)], check=False)
+
     return {"ok": True}
 
 

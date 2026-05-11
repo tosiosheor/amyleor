@@ -26,6 +26,8 @@ Recommended approach:
 - Use both as the input folders. 
 - Check the settings - countdown, intro, outro - and then 'Generate Plan'.
 - Review the plan. You can make some tweaks here and there. A critical thing might be to mute any videos that have music that might compete with yours.
+- Click a clip in the timeline to preview the exact selected segment in-browser with audio, so you can verify timing and mute choices without opening the source clip separately.
+- If Auto-mute is enabled, clips detected as non-music audio are visually flagged as `LOUD` so you can quickly double-check and mute them manually when needed.
 - Generate video.
 
 ---
@@ -65,6 +67,7 @@ Set a music folder in "Source & Destination" (optional — leave blank to skip).
 - **Cross-fade**: FFmpeg `xfade` filter for video and `acrossfade` for audio, chained across all clips. Configurable duration (default 0.5 s). Works with or without music.
 - **Music mixing**: music plays alongside original clip audio. Volume controlled by "Music volume %" (default 30%). Music is looped/concatenated as needed to cover the full duration.
 - **Energy ordering**: tracks are randomly selected then sorted chill → intense by RMS loudness, so the video naturally builds in energy over time. Energy values are cached alongside other music metadata.
+- **Auto-mute review flags** (requires `librosa`): with "Auto-mute clips with music or noise" enabled, clips detected as music/noise are muted automatically, and clips detected as non-music audio are marked `LOUD` in the plan timeline/editor for manual review.
 
 ### Countdown overlay
 
@@ -158,7 +161,9 @@ browser  ──HTTP/SSE──►  server.py (FastAPI + uvicorn)
 
 - **Plan Video** POSTs settings to `/api/plan`; the server runs `do_analyse` in a background thread and streams log/progress/plan events back via SSE.
 - **Generate Video** POSTs the (possibly edited) plan JSON to `/api/generate`; the server runs `do_generate` and streams progress back the same way.
-- **Timeline** in the browser lets you drag clips to reorder, click to edit start/duration, or remove clips before generating.
+- **Timeline** in the browser lets you drag clips to reorder, click to edit start/duration, preview the exact segment with audio, or remove clips before generating.
+- **Clip editor filename reveal**: click the selected clip filename in the editor to reveal that source file in Finder (macOS) and highlight it.
+- **Clip Navigation** includes `Prev`/`Next` controls plus a `LOUD only` toggle to jump through only loud-flagged, not-yet-muted clips for faster review.
 
 ### Key functions
 

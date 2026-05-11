@@ -13,6 +13,7 @@
   --text:      #f5f5f7;
   --subtle:    #8e8e93;
   --accent:    #0a84ff;
+  --warning:   #ff9f0a;
   --success:   #30d158;
   --error:     #ff453a;
   --border:    #3a3a3c;
@@ -105,8 +106,31 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 .plan-hdr {
   display: flex; align-items: center; justify-content: space-between;
   padding: 14px 0 10px;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 .plan-hdr h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--subtle); }
+.plan-tools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.plan-subhdr {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 0 10px;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.plan-subhdr h2 { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--subtle); }
+.nav-controls { display: flex; align-items: center; gap: 8px; }
+.nav-toggle {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--subtle);
+}
+.nav-toggle input {
+  width: 14px; height: 14px; margin: 0;
+  accent-color: var(--warning);
+}
+.nav-status {
+  font-size: 12px; color: var(--subtle);
+  min-width: 108px;
+}
 
 /* ── Timeline ── */
 .tl-wrap {
@@ -196,6 +220,13 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 .clip-info { position: absolute; bottom: 4px; left: 5px; right: 5px; z-index: 2; }
 .clip-name { font-size: 10px; font-weight: 500; color: rgba(255,255,255,0.9); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .clip-dur  { font-size: 9px; color: rgba(255,255,255,0.55); }
+.clip-flag {
+  position: absolute; top: 0; left: 0; right: 0;
+  color: #fff; font-size: 9px; font-weight: 700;
+  text-align: center; padding: 1px 0; letter-spacing: 0.07em;
+  z-index: 3; pointer-events: none;
+}
+.clip-flag.loud { background: rgba(255,159,10,0.75); }
 /* music blocks */
 .music-block {
   position: absolute; top: 3px; bottom: 3px;
@@ -226,6 +257,34 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 }
 .clip-editor.open { display: block; }
 .clip-editor-title { font-size: 13px; font-weight: 600; margin-bottom: 10px; word-break: break-all; }
+.clip-editor-title button {
+  all: unset;
+  cursor: pointer;
+  color: var(--text);
+  text-decoration: underline;
+  text-decoration-color: rgba(10,132,255,0.6);
+  text-underline-offset: 2px;
+}
+.clip-editor-title button:hover {
+  color: #fff;
+  text-decoration-color: var(--accent);
+}
+.clip-editor-preview {
+  margin-top: 12px;
+  display: grid;
+  gap: 8px;
+}
+.clip-editor-preview video {
+  width: min(100%, 640px);
+  max-height: 360px;
+  background: #000;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.clip-editor-note {
+  color: var(--subtle);
+  font-size: 12px;
+}
 .clip-editor-fields { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .ce-field { display: flex; align-items: center; gap: 6px; font-size: 13px; }
 .ce-field label { color: var(--subtle); }
@@ -238,6 +297,10 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
 .badge.portrait  { background: var(--portrait);  color: #c4a7ff; }
 .badge.landscape { background: var(--landscape); color: #7eb8ff; }
+.badge.loud-audio {
+  box-shadow: inset 0 0 0 1px rgba(255,159,10,0.65);
+  color: #ffd8a1;
+}
 
 /* ── JSON toggle / editor ── */
 .json-toggle-row { padding: 4px 0 2px; }
@@ -493,9 +556,24 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 
   <div class="plan-hdr">
     <h2>Plan</h2>
-    <div class="btn-group">
-      <button class="btn sm" onclick="loadPlan()">Load…</button>
-      <button class="btn sm" id="btn-save" onclick="savePlan()" disabled>Save…</button>
+    <div class="plan-tools">
+      <span class="nav-status" id="jump-status">No plan</span>
+      <div class="btn-group">
+        <button class="btn sm" onclick="loadPlan()">Load…</button>
+        <button class="btn sm" id="btn-save" onclick="savePlan()" disabled>Save…</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="plan-subhdr">
+    <h2>Clip Navigation</h2>
+    <div class="nav-controls">
+      <label class="nav-toggle" for="jump-loud-only">
+        <input type="checkbox" id="jump-loud-only" onchange="updateJumpNav()">
+        LOUD only
+      </label>
+      <button class="btn sm" id="btn-jump-prev" onclick="jumpClip(-1)">Prev</button>
+      <button class="btn sm" id="btn-jump-next" onclick="jumpClip(1)">Next</button>
     </div>
   </div>
 
@@ -531,7 +609,9 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
 
   <!-- Clip editor -->
   <div class="clip-editor" id="clip-editor">
-    <div class="clip-editor-title" id="ce-name"></div>
+    <div class="clip-editor-title">
+      <button type="button" id="ce-name" onclick="revealSelectedClip()"></button>
+    </div>
     <div class="clip-editor-fields">
       <div class="ce-field">
         <label>Start</label>
@@ -551,6 +631,10 @@ progress::-webkit-progress-value { background: var(--accent); border-radius: 3px
         <label for="ce-muted" style="cursor:pointer;color:var(--text)">Mute clip audio</label>
       </div>
       <button class="btn sm danger" onclick="removeClip()">Remove</button>
+    </div>
+    <div class="clip-editor-preview">
+      <video id="ce-preview" controls playsinline preload="metadata"></video>
+      <div class="clip-editor-note">Preview plays the exact selected clip segment with source audio when available.</div>
     </div>
   </div>
 
@@ -866,7 +950,70 @@ function setPlan(p) {
     saveSettings();
   }
   renderTimeline(); renderEditor();
+  updateJumpNav();
   if (jsonOpen) syncToJson();
+}
+
+function loudReviewIndices() {
+  if (!plan || !plan.clips) return [];
+  const out = [];
+  plan.clips.forEach((c, i) => {
+    if (c && c.audio_review_loud && !c.muted) out.push(i);
+  });
+  return out;
+}
+
+function jumpCandidates() {
+  if (!plan || !plan.clips) return [];
+  const loudOnly = document.getElementById('jump-loud-only').checked;
+  if (loudOnly) return loudReviewIndices();
+  return plan.clips.map((_, i) => i);
+}
+
+function updateJumpNav() {
+  const prevBtn = document.getElementById('btn-jump-prev');
+  const nextBtn = document.getElementById('btn-jump-next');
+  const status = document.getElementById('jump-status');
+  const loudOnly = document.getElementById('jump-loud-only').checked;
+
+  if (!plan || !plan.clips || plan.clips.length === 0) {
+    prevBtn.disabled = true;
+    nextBtn.disabled = true;
+    status.textContent = 'No plan';
+    return;
+  }
+
+  const loud = loudReviewIndices();
+  const candidates = loudOnly ? loud : plan.clips.map((_, i) => i);
+  prevBtn.disabled = candidates.length === 0;
+  nextBtn.disabled = candidates.length === 0;
+
+  if (loudOnly) {
+    if (loud.length === 0) {
+      status.textContent = 'LOUD 0';
+    } else {
+      const pos = loud.indexOf(selIdx);
+      status.textContent = pos >= 0 ? `LOUD ${pos + 1}/${loud.length}` : `LOUD ${loud.length}`;
+    }
+  } else {
+    status.textContent = `Clips ${plan.clips.length}`;
+  }
+}
+
+function jumpClip(direction) {
+  const cands = jumpCandidates();
+  if (!cands.length) return;
+
+  const pos = cands.indexOf(selIdx);
+  let nextPos;
+  if (pos < 0) nextPos = direction >= 0 ? 0 : cands.length - 1;
+  else nextPos = (pos + (direction >= 0 ? 1 : -1) + cands.length) % cands.length;
+
+  selectClip(cands[nextPos]);
+  requestAnimationFrame(() => {
+    const selected = document.querySelector('.clip-block.selected');
+    if (selected) selected.scrollIntoView({behavior: 'smooth', block: 'nearest', inline: 'center'});
+  });
 }
 
 // ── Zoom ───────────────────────────────────────────────────────────────────
@@ -945,22 +1092,26 @@ function renderVideoTrack(dur, W) {
   let t = 0;
   plan.clips.forEach((clip, idx) => {
     const portrait = clip.height > clip.width;
+    const loudReview = !!clip.audio_review_loud;
     const x = Math.round(t * pxPerSec);
     const w = Math.max(4, Math.round(clip.duration * pxPerSec) - 2);
     const name = clip.path.split('/').pop();
 
     const block = document.createElement('div');
-    block.className = `clip-block ${portrait ? 'portrait' : 'landscape'}${idx === selIdx ? ' selected' : ''}${clip.muted ? ' muted' : ''}`;
+    block.className = `clip-block ${portrait ? 'portrait' : 'landscape'}${idx === selIdx ? ' selected' : ''}${clip.muted ? ' muted' : ''}${loudReview && !clip.muted ? ' loud' : ''}`;
     block.style.cssText = `left:${x}px;width:${w}px`;
     block.dataset.idx = idx;
-    block.title = clip.path + '\n⌦ Double-click to open';
+    block.title = clip.path + (loudReview ? '\nLOUD audio detected (review mute setting)' : '') + '\n⌦ Double-click to open';
     block.style.backgroundImage =
       `url('/api/thumbnail?path=${encodeURIComponent(clip.path)}&time=${clip.start}')`;
+    const loudFlagHtml = (loudReview && !clip.muted) ? '<div class="clip-flag loud">LOUD</div>' : '';
 
     if (w > 32) {
       block.innerHTML =
-        `<div class="clip-info"><div class="clip-name">${escHtml(name)}</div>` +
+        `${loudFlagHtml}<div class="clip-info"><div class="clip-name">${escHtml(name)}</div>` +
         `<div class="clip-dur">${clip.duration.toFixed(1)}s</div></div>`;
+    } else if (loudFlagHtml) {
+      block.innerHTML = loudFlagHtml;
     }
 
     block.addEventListener('click', e => { if (!e.detail || e.detail < 2) selectClip(idx); });
@@ -1069,20 +1220,42 @@ function addCpLines(container, dur) {
 
 // ── Clip selection & editor ────────────────────────────────────────────────
 
-function selectClip(idx) { selIdx = idx; renderTimeline(); renderEditor(); }
+function selectClip(idx) { selIdx = idx; renderTimeline(); renderEditor(); updateJumpNav(); }
+
+function clipPreviewUrl(clip) {
+  const params = new URLSearchParams({
+    path: clip.path,
+    start: String(clip.start ?? 0),
+    duration: String(clip.duration ?? 0),
+  });
+  return `/api/clip_preview?${params.toString()}`;
+}
 
 function renderEditor() {
   const ed = document.getElementById('clip-editor');
-  if (selIdx < 0 || !plan || selIdx >= plan.clips.length) { ed.classList.remove('open'); return; }
+  const preview = document.getElementById('ce-preview');
+  if (selIdx < 0 || !plan || selIdx >= plan.clips.length) {
+    preview.pause();
+    preview.removeAttribute('src');
+    preview.load();
+    ed.classList.remove('open');
+    return;
+  }
   const c = plan.clips[selIdx];
   const portrait = c.height > c.width;
-  document.getElementById('ce-name').textContent = c.path.split('/').pop();
+  const loudReview = !!c.audio_review_loud;
+  const ceName = document.getElementById('ce-name');
+  ceName.textContent = c.path.split('/').pop();
+  ceName.title = c.path + '\nClick to reveal in Finder';
   document.getElementById('ce-start').value = c.start;
   document.getElementById('ce-dur').value   = c.duration;
   const badge = document.getElementById('ce-badge');
-  badge.textContent = portrait ? 'portrait' : 'landscape';
-  badge.className = `badge ${portrait ? 'portrait' : 'landscape'}`;
+  badge.textContent = (portrait ? 'portrait' : 'landscape') + (loudReview ? ' · loud audio' : '');
+  badge.className = `badge ${portrait ? 'portrait' : 'landscape'}${loudReview ? ' loud-audio' : ''}`;
   document.getElementById('ce-muted').checked = !!c.muted;
+  preview.pause();
+  preview.src = clipPreviewUrl(c);
+  preview.load();
   ed.classList.add('open');
 }
 
@@ -1098,6 +1271,7 @@ function updateClip(field, val) {
     });
   }
   renderTimeline();
+  updateJumpNav();
   if (jsonOpen) syncToJson();
 }
 
@@ -1106,16 +1280,35 @@ function removeClip() {
   plan.clips.splice(selIdx, 1);
   selIdx = plan.clips.length === 0 ? -1 : Math.min(selIdx, plan.clips.length - 1);
   renderTimeline(); renderEditor();
+  updateJumpNav();
   if (jsonOpen) syncToJson();
 }
 
-// ── Open file ──────────────────────────────────────────────────────────────
+// ── Open / reveal file ─────────────────────────────────────────────────────
 
 async function openFile(path) {
   await fetch('/api/open', {
     method: 'POST', headers: {'Content-Type':'application/json'},
     body: JSON.stringify({path}),
   });
+}
+
+async function revealFile(path) {
+  try {
+    const res = await fetch('/api/reveal', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({path}),
+    });
+    const data = await res.json();
+    if (!data.ok && data.error) appendLog('⚠  Reveal failed: ' + data.error, 'error');
+  } catch (e) {
+    appendLog('⚠  Reveal failed: ' + e.message, 'error');
+  }
+}
+
+function revealSelectedClip() {
+  if (selIdx < 0 || !plan || selIdx >= plan.clips.length) return;
+  revealFile(plan.clips[selIdx].path);
 }
 
 // ── JSON editor ────────────────────────────────────────────────────────────
@@ -1140,7 +1333,7 @@ function scheduleJsonSync() {
   jsonTimer = setTimeout(() => {
     try {
       const parsed = JSON.parse(document.getElementById('json-ta').value);
-      plan = parsed; renderTimeline(); renderEditor();
+      plan = parsed; renderTimeline(); renderEditor(); updateJumpNav();
     } catch(_) {}
   }, 400);
 }
@@ -1192,6 +1385,7 @@ function escHtml(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replac
   renderIntroLines();
   await loadFonts();
   await loadSettings();
+  updateJumpNav();
   onFontChange();
 })();
 </script>

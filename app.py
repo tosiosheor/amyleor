@@ -924,10 +924,11 @@ class VideoMixer(tk.Tk):
                     "duration": dur,
                 }
                 orient = "portrait" if info["height"] > info["width"] else "landscape"
+                loud_tag = " [LOUD review]" if c.get("audio_review_loud") else ""
                 self._log(
                     f"  [{i+1:>{len(str(n))}}/{n}] {vf.name}"
                     f"  {info['width']}×{info['height']} ({orient})"
-                    f"  start={start:.1f}s  dur={dur:.1f}s"
+                    f"  start={start:.1f}s  dur={dur:.1f}s{loud_tag}"
                 )
 
                 motion = None
@@ -1549,6 +1550,7 @@ class VideoMixer(tk.Tk):
                     "height": info["height"],
                     "has_audio": info["has_audio"],
                     "motion": list(motion_by_idx[i]) if i in motion_by_idx else None,
+                    "audio_review_loud": False,
                 }
                 for i, (vf, info, start, dur) in enumerate(clips)
             ],
