@@ -62,13 +62,17 @@ def build_countdown_events(
     total_dur, countdown_dur, interval_min, interval_max,
     text1, text1_dur, text2, text2_dur,
     change_points, rng,
+    change_point_scores=None,
 ):
     """
     Return list of (start_sec, end_sec, text_str) tuples for all overlay segments.
     Countdown numerals are expanded into per-second events.
 
     Sync logic: if change_points provided, shift each countdown start so that
-    (countdown_end + text1_dur) lands on the nearest upcoming change point.
+    the text1→text2 transition (countdown_end + text1_dur) lands on the most
+    significant musical change point (by z-score) in range. Falls back to nearest
+    when scores are unavailable. Among equally significant candidates, prefers one
+    where countdown_end also lands on a change point (secondary goal).
     """
     post_dur = (text1_dur if text1 else 0.0) + (text2_dur if text2 and text1 else 0.0)
     sync_offset = text1_dur if text1 else 0.0
@@ -90,12 +94,39 @@ def build_countdown_events(
             raw_target = cdown_start + countdown_dur + sync_offset
             search_lo = cdown_start + countdown_dur * 0.5
             search_hi = raw_target + 20.0
-            candidates = [cp for cp in change_points if search_lo < cp <= search_hi]
-            if candidates:
-                best = min(candidates, key=lambda cp: abs(cp - raw_target))
-                new_start = best - countdown_dur - sync_offset
-                if new_start >= 0 and new_start >= t - (interval_max * 0.5):
-                    cdown_start = new_start
+
+            if change_point_scores:
+                # Pick the most significant change point in the search window.
+                # Secondary preference: countdown_end (= cp - text1_dur) also near a cp.
+                indexed = [
+                    (change_point_scores[j], cp)
+                    for j, cp in enumerate(change_points)
+                    if search_lo < cp <= search_hi
+                ]
+                if indexed:
+                    max_score = max(s for s, _ in indexed)
+                    top_tier = [(s, cp) for s, cp in indexed if s >= max_score * 0.7]
+
+                    def _secondary_dist(cp_val):
+                        # Distance from countdown_end to the nearest OTHER change point
+                        countdown_end = cp_val - sync_offset
+                        dists = [abs(c - countdown_end) for c in change_points if c != cp_val]
+                        return min(dists) if dists else float("inf")
+
+                    # Sort: secondary within 1s first, then highest score
+                    top_tier.sort(key=lambda x: (_secondary_dist(x[1]) > 1.0, -x[0]))
+                    _, best_cp = top_tier[0]
+                    new_start = best_cp - countdown_dur - sync_offset
+                    if new_start >= 0 and new_start >= t - (interval_max * 0.5):
+                        cdown_start = new_start
+            else:
+                # No scores: fall back to nearest change point
+                candidates = [cp for cp in change_points if search_lo < cp <= search_hi]
+                if candidates:
+                    best = min(candidates, key=lambda cp: abs(cp - raw_target))
+                    new_start = best - countdown_dur - sync_offset
+                    if new_start >= 0 and new_start >= t - (interval_max * 0.5):
+                        cdown_start = new_start
 
         cdown_end = cdown_start + countdown_dur
         if cdown_end > total_dur:
